@@ -1,0 +1,11 @@
+# Track Shifter — Intelligence Layer Dependencies
+# ================================================
+
+ics>=0.7                   # .ics calendar parsing (Navigator AI)
+sentence-transformers>=2.2 # Semantic similarity (Notification Filter)
+google-genai>=1.0          # Gemini API for quiz generation (Quiz Engine)
+
+# --- Future / Optional ---
+# pydantic>=2.0        # For stricter data validation
+# schedule>=1.2        # For cron-like session scheduling
+

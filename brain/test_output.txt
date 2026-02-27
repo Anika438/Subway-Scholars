@@ -1,0 +1,5 @@
+GREAT DAY  (200min, 2dist, 90%acc, peak=10) => {"focus_score": 88, "consistency_rating": "High", "suggested_next_day_sprint": 27, "burnout_risk": "Low"}
+AVERAGE    (120min, 5dist, 60%acc, peak=14) => {"focus_score": 63, "consistency_rating": "Medium", "suggested_next_day_sprint": 25, "burnout_risk": "Low"}
+ROUGH DAY  ( 40min,12dist, 30%acc, peak=22) => {"focus_score": 19, "consistency_rating": "Low", "suggested_next_day_sprint": 15, "burnout_risk": "Low"}
+OVERWORKED (450min, 9dist, 70%acc, peak=23) => {"focus_score": 64, "consistency_rating": "Medium", "suggested_next_day_sprint": 20, "burnout_risk": "High"}
+ZERO       (  0min, 0dist,  0%acc, peak=12) => {"focus_score": 30, "consistency_rating": "Low", "suggested_next_day_sprint": 20, "burnout_risk": "Low"}
