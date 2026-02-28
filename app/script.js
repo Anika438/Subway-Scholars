@@ -27,14 +27,17 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentActiveSprint = null;
     let ws = null;
 
+    let quizActive = false; // Prevent multiple quiz popups
+
     // Initialize WebSocket for Block Events
     function initWebSocket() {
         ws = new WebSocket("ws://localhost:8000/ws");
 
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
-            if (data.event === "BLOCK" && currentActiveSprint) {
+            if (data.event === "BLOCK" && currentActiveSprint && !quizActive) {
                 console.log("OS Blocker Activated!", data.app);
+                triggerQuizPopup();
             }
         };
 
@@ -46,6 +49,137 @@ document.addEventListener("DOMContentLoaded", () => {
             console.log("WebSocket connection closed. Reconnecting...");
             setTimeout(initWebSocket, 3000);
         };
+    }
+
+    // --- QUIZ POPUP LOGIC (Non-Closable) ---
+    async function triggerQuizPopup() {
+        quizActive = true;
+        quizOverlay.style.display = "flex";
+        quizContainer.innerHTML = "";
+        quizLoader.style.display = "flex";
+
+        // Prevent Escape key from closing
+        document.addEventListener("keydown", blockEscape);
+
+        const topic = currentActiveSprint ? currentActiveSprint.suggested_topic : "General Study";
+
+        try {
+            const res = await fetch("http://localhost:8000/api/brain/quiz", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ topic: topic, num_questions: 3 })
+            });
+            const data = await res.json();
+            quizLoader.style.display = "none";
+
+            if (data.quiz && data.quiz.length > 0) {
+                showQuizQuestions(data.quiz);
+            } else {
+                // Fallback: if API returns empty, still block until retry
+                quizContainer.innerHTML = `<p style="color: #ff3b3b;">Failed to load questions. Retrying...</p>`;
+                setTimeout(() => {
+                    quizLoader.style.display = "flex";
+                    quizContainer.innerHTML = "";
+                    triggerQuizPopup();
+                }, 3000);
+            }
+        } catch (err) {
+            console.error("Quiz fetch error:", err);
+            quizLoader.style.display = "none";
+            quizContainer.innerHTML = `<p style="color: #ff3b3b;">Server error. Retrying in 3s...</p>`;
+            setTimeout(() => {
+                quizContainer.innerHTML = "";
+                triggerQuizPopup();
+            }, 3000);
+        }
+    }
+
+    function blockEscape(e) {
+        if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }
+
+    function showQuizQuestions(questions) {
+        let currentIndex = 0;
+
+        function renderQuestion() {
+            quizContainer.innerHTML = "";
+
+            if (currentIndex >= questions.length) {
+                // All answered correctly — dismiss!
+                quizOverlay.style.display = "none";
+                quizActive = false;
+                document.removeEventListener("keydown", blockEscape);
+                return;
+            }
+
+            const q = questions[currentIndex];
+
+            // Progress indicator
+            const progress = document.createElement("p");
+            progress.style.color = "#FF9800";
+            progress.style.fontWeight = "bold";
+            progress.style.marginBottom = "10px";
+            progress.textContent = `Question ${currentIndex + 1} of ${questions.length}`;
+            quizContainer.appendChild(progress);
+
+            // Question text
+            const qText = document.createElement("p");
+            qText.textContent = q.question;
+            qText.style.fontSize = "1.1rem";
+            qText.style.marginBottom = "15px";
+            qText.style.color = "#fff";
+            quizContainer.appendChild(qText);
+
+            // Feedback area
+            const feedback = document.createElement("p");
+            feedback.style.marginTop = "10px";
+            feedback.style.fontWeight = "bold";
+            feedback.style.minHeight = "24px";
+
+            // Option buttons
+            q.options.forEach(option => {
+                const btn = document.createElement("button");
+                btn.className = "quiz-btn";
+                btn.textContent = option;
+                btn.addEventListener("click", () => {
+                    // Disable all buttons after click
+                    const allBtns = quizContainer.querySelectorAll(".quiz-btn");
+                    allBtns.forEach(b => b.disabled = true);
+
+                    if (option === q.correct_answer) {
+                        btn.classList.add("correct");
+                        feedback.textContent = "✅ Correct!";
+                        feedback.style.color = "#00E676";
+                        currentIndex++;
+                        setTimeout(renderQuestion, 1000);
+                    } else {
+                        btn.classList.add("wrong");
+                        // Highlight the correct one
+                        allBtns.forEach(b => {
+                            if (b.textContent === q.correct_answer) b.classList.add("correct");
+                        });
+                        feedback.textContent = q.explanation ? `❌ Wrong! ${q.explanation}` : "❌ Wrong answer. Try the next one.";
+                        feedback.style.color = "#ff3b3b";
+                        // Re-enable after a delay so they must try again
+                        setTimeout(() => {
+                            allBtns.forEach(b => {
+                                b.disabled = false;
+                                b.classList.remove("wrong", "correct");
+                            });
+                            feedback.textContent = "";
+                        }, 2000);
+                    }
+                });
+                quizContainer.appendChild(btn);
+            });
+
+            quizContainer.appendChild(feedback);
+        }
+
+        renderQuestion();
     }
 
     initWebSocket();

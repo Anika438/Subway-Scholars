@@ -80,7 +80,7 @@ async def lock_system(request: dict = None):
     system_state["current_challenge"] = ""
     system_state["active_topic"] = topic
     system_state["monitoring_active"] = True
-    print(f"🔒 System locked. Monitoring active for topic: {topic}", flush=True)
+    print(f"System locked. Monitoring active for topic: {topic}", flush=True)
     return {"success": True, "message": "System locked. Monitoring resumed."}
 
 # --- Brain Integration Endpoints ---

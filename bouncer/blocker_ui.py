@@ -61,9 +61,8 @@ class SubwayBlockerUI:
         info_lbl = tk.Label(self.root, text=f"You must answer 3 questions about '{self.topic}' to unlock.", font=self.body_font, fg="#fff", bg=self.color_bg)
         info_lbl.pack()
         
-        # Failsafe button just in case AI hangs
-        self.failsafe_btn = tk.Button(self.root, text="Exit (AI Failed)", bg="#555", fg="#fff", command=self.unlock_system)
-        self.failsafe_btn.pack(pady=20)
+        loading_lbl = tk.Label(self.root, text="Loading questions...", font=("Arial", 14), fg=self.color_primary, bg=self.color_bg)
+        loading_lbl.pack(pady=20)
 
     def fetch_questions(self):
         """Runs concurrently to fetch questions from Gemini."""
@@ -137,9 +136,7 @@ class SubwayBlockerUI:
         self.feedback_lbl = tk.Label(self.root, text="", font=self.btn_font, bg=self.color_bg)
         self.feedback_lbl.pack(pady=10)
         
-        # Failsafe button
-        failsafe_btn2 = tk.Button(self.root, text="Failsafe Exit/Skip", bg="#555", fg="#fff", command=self.unlock_system)
-        failsafe_btn2.pack(pady=10)
+
 
     def check_answer(self, selected: str, mcq):
         """Validates click and moves to next or penalizes."""
