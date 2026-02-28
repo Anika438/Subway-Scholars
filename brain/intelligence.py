@@ -30,92 +30,51 @@ class MCQ(BaseModel):
     correct_answer: str
     explanation: str
 
-def parse_calendar_for_sprints(ics_file_path: str, target_date: datetime.date = None) -> List[StudySprint]:
-    """Parses an .ics file and finds 30+ minute gaps for study sprints."""
-    if target_date is None:
-        target_date = datetime.date.today()
-
-    try:
-        with open(ics_file_path, 'r', encoding='utf-8') as f:
-            calendar = icalendar.Calendar.from_ical(f.read())
-    except FileNotFoundError:
-        print(f"Calendar file not found: {ics_file_path}")
-        return []
-
-    # Extract all events for the target date
-    events = []
-    for component in calendar.walk():
-        if component.name == "VEVENT":
-            start = component.get('dtstart')
-            end = component.get('dtend')
-            
-            if start and end and hasattr(start.dt, 'date') and start.dt.date() == target_date:
-                events.append({
-                    "start": start.dt,
-                    "end": end.dt,
-                    "summary": str(component.get('summary'))
-                })
-
-    # Sort events by start time
-    events.sort(key=lambda x: x['start'])
-
-    sprints = []
-    
-    # Define the working day bounds
-    day_start = datetime.datetime.combine(target_date, datetime.time(8, 0)).astimezone(events[0]['start'].tzinfo if events else None)
-    day_end = datetime.datetime.combine(target_date, datetime.time(22, 0)).astimezone(events[0]['start'].tzinfo if events else None)
-
-    current_time = day_start
-
-    # Find gaps between events
-    for event in events:
-        gap_duration = (event['start'] - current_time).total_seconds() / 60.0
-        
-        # If there is a gap of at least 30 minutes, suggest a sprint
-        if gap_duration >= 30:
-            sprints.append(StudySprint(
-                start_time=current_time,
-                end_time=event['start'],
-                duration_minutes=int(gap_duration),
-                suggested_topic="General Study" # Could be enhanced to analyze surrounding events
-            ))
-            
-        current_time = max(current_time, event['end'])
-
-    # Check for a gap after the last event until the end of the day
-    if current_time < day_end:
-        final_gap = (day_end - current_time).total_seconds() / 60.0
-        if final_gap >= 30:
-            sprints.append(StudySprint(
-                start_time=current_time,
-                end_time=day_end,
-                duration_minutes=int(final_gap),
-                suggested_topic="Evening Review"
-            ))
-
-    return sprints
-
-
-def parse_text_timetable_for_sprints(text: str, target_date: datetime.date = None) -> List[StudySprint]:
-    """Generates study sprints from a plain text timetable using Gemini."""
-    if target_date is None:
-        target_date = datetime.date.today()
-
+def get_sprints_from_ai(text_context: str, target_date: datetime.date) -> List[StudySprint]:
+    """Helper function to get study sprints from Groq using a flexible prompt."""
     if not client:
-        raise Exception("Groq client not initialized. Cannot parse text timetable.")
+        raise Exception("Groq client not initialized. Cannot parse timetable.")
 
     prompt = f"""
-    You are an AI assistant that finds study gaps in a user's daily schedule.
+    You are an AI assistant that plans study sprints for a user.
     Assume the current date and time is {datetime.datetime.now().isoformat()}.
     
-    The user will provide text representing either their daily timetable or a general study goal.
-    - If they provide a detailed schedule with times, identify open blocks of time that are at least 30 minutes long.
-    - If they provide general subjects without explicit times (e.g., 'german and maths quiz'), count the number of distinct subjects. Generate exactly that many 45-minute sprints, one per subject. Use the subject name as the suggested_topic. Do NOT invent extra sprints such as 'Quiz Preparation', 'Review', 'Break', or anything the user did not explicitly name. The number of sprints MUST equal the number of subjects.
+    The user will provide text representing their daily schedule/calendar events, a list of study goals, OR a detailed course syllabus/curriculum.
     
-    Return a JSON array of study sprints matching this exact schema for each object:
-    {{"start_time": "YYYY-MM-DDTHH:MM:SS", "end_time": "YYYY-MM-DDTHH:MM:SS", "duration_minutes": "int", "suggested_topic": "string"}}
-    The user's schedule/request text:
-    "{text}"
+    Case A: The user provides a course syllabus, curriculum, or detailed list of topics.
+    - Break down the subjects into distinct, chewable topics (e.g., instead of just "Math", use "Math: Integration by Parts").
+    - Generate a series of sprints to cover these specific course topics sequentially.
+    - The `suggested_topic` MUST be the specific chapter/topic name from the course. This will be used later to generate quizzes, so be precise!
+    - The duration of the sprint should be around 45 mins per topic unless otherwise specified.
+
+    Case B: The user provides a list or timeline of busy calendar events.
+    - Identify open blocks of free time that are at least 30 minutes long.
+    - Create study sprints in those empty gaps. 
+    - If the user's calendar events ARE the subjects/course topics they want to study (e.g. "Math: 4pm to 5pm"), then make the `suggested_topic` exactly that. 
+    - Otherwise, if the events are just "busy" indicators (e.g. "Lunch"), name the `suggested_topic` something relevant to the time of day (e.g., 'Morning Study Session').
+    - The duration of the sprint should fill the available gap in the calendar.
+
+    Case C: The user provides a list of general subjects to study without explicit free/busy times.
+    - Count the number of distinct subjects provided. 
+    - Generate EXACTLY that many sprints, one per subject.
+    - The `suggested_topic` MUST be the name of the subject. 
+    - Do NOT invent extra sprints (e.g., 'Quiz Preparation', 'Review', 'Break'). The number of sprints MUST equal the number of subjects.
+    
+    Return a JSON object with a "sprints" key containing an array of study sprints matching this exact schema:
+    {{
+        "sprints": [
+            {{
+                "start_time": "YYYY-MM-DDTHH:MM:SS",
+                "end_time": "YYYY-MM-DDTHH:MM:SS", 
+                "duration_minutes": int, 
+                "suggested_topic": "Specific Topic Name",
+                "session_type": "Sprint" | "Marathon"
+            }}
+        ]
+    }}
+    
+    The user's input text:
+    "{text_context}"
     """
 
     try:
@@ -134,8 +93,6 @@ def parse_text_timetable_for_sprints(text: str, target_date: datetime.date = Non
         # Unpack dicts into Pydantic models (handling the array wrapping if any)
         sprints_data = []
         if isinstance(sprints_dict, dict):
-             # Llama might wrap it like {"sprints": [...]} or just return the list directly, 
-             # let's be robust:
              for key in sprints_dict:
                  if isinstance(sprints_dict[key], list):
                      for item in sprints_dict[key]:
@@ -150,7 +107,7 @@ def parse_text_timetable_for_sprints(text: str, target_date: datetime.date = Non
             return sprints_data
             
     except Exception as e:
-        error_msg = f"Error parsing text timetable: {repr(e)}"
+        error_msg = f"Error parsing timetable: {repr(e)}"
         print(error_msg, flush=True)
         # Create a fallback sprint when rate limited
         return [
@@ -163,6 +120,41 @@ def parse_text_timetable_for_sprints(text: str, target_date: datetime.date = Non
         ]
         
     return []
+
+
+def parse_calendar_for_sprints(ics_file_path: str, target_date: datetime.date = None) -> List[StudySprint]:
+    """Parses an .ics file and uses AI to find study gaps."""
+    if target_date is None:
+        target_date = datetime.date.today()
+
+    try:
+        with open(ics_file_path, 'r', encoding='utf-8') as f:
+            calendar = icalendar.Calendar.from_ical(f.read())
+    except FileNotFoundError:
+        print(f"Calendar file not found: {ics_file_path}")
+        return []
+
+    events_text = ["Here are the calendar events for the day:"]
+    for component in calendar.walk():
+        if component.name == "VEVENT":
+            start = component.get('dtstart')
+            end = component.get('dtend')
+            
+            if start and end and hasattr(start.dt, 'date') and start.dt.date() == target_date:
+                events_text.append(f"- {component.get('summary')} from {start.dt} to {end.dt}")
+
+    if len(events_text) == 1:
+        events_text.append("No events scheduled for today. The whole day is free.")
+
+    return get_sprints_from_ai("\n".join(events_text), target_date)
+
+
+def parse_text_timetable_for_sprints(text: str, target_date: datetime.date = None) -> List[StudySprint]:
+    """Generates study sprints from a plain text timetable using AI."""
+    if target_date is None:
+        target_date = datetime.date.today()
+        
+    return get_sprints_from_ai(text, target_date)
 
 
 def generate_mcqs(topic: str, num_questions: int = 3) -> List[MCQ]:
