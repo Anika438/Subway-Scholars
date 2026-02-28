@@ -1,0 +1,106 @@
+/* ── Track Wrapper ── */
+.track-wrapper {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 68%;
+  z-index: 2;
+  overflow: hidden;
+  transform-style: preserve-3d;
+}
+
+/* ── Track Surface (3D plane) ── */
+.track-surface {
+  position: absolute;
+  bottom: 0;
+  left: -25%;
+  width: 150%;
+  height: 135%;
+  transform: rotateX(70deg);
+  transform-origin: bottom center;
+  transform-style: preserve-3d;
+}
+
+/* ── Ground color (warm golden-brown like Subway Surfers) ── */
+.track-ground {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    #b08530 0%,
+    #c9a040 15%,
+    #d4aa4a 30%,
+    #dbb55c 50%,
+    #c9a040 70%,
+    #b8932e 85%,
+    #a07820 100%
+  );
+}
+
+/* ── Gravel strips on edges ── */
+.gravel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 14%;
+  background: linear-gradient(
+    to bottom,
+    #96752e 0%,
+    #7a6025 50%,
+    #96752e 100%
+  );
+}
+
+.gravel-left { left: 0; }
+.gravel-right { right: 0; }
+
+/* ── Rail Ties (sleepers) ── */
+.track-ties {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  animation: scrollTies linear infinite;
+}
+
+.tie {
+  width: 100%;
+  height: 6px;
+  background: #7a5c24;
+  border-top: 1px solid #8d6e30;
+  border-bottom: 1px solid #5c4418;
+  flex-shrink: 0;
+  margin-bottom: 16px;
+}
+
+@keyframes scrollTies {
+  0% { transform: translateY(-22px); }
+  100% { transform: translateY(0px); }
+}
+
+/* ── Rails ── */
+.rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(
+    to bottom,
+    #777,
+    #a0a0a8 30%,
+    #c8c8d0 60%,
+    #999
+  );
+  box-shadow:
+    1px 0 2px rgba(0,0,0,0.35),
+    0 0 4px rgba(200,200,220,0.2);
+}
+
+.rail-1 { left: 20%; }
+.rail-2 { left: 28%; }
+.rail-3 { left: 46%; }
+.rail-4 { left: 54%; }
+.rail-5 { left: 72%; }
+.rail-6 { left: 80%; }

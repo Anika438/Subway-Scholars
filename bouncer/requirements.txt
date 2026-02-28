@@ -3,3 +3,4 @@ uvicorn
 pygetwindow
 pydantic
 python-multipart
+winsdk

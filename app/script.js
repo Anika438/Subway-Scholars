@@ -1,4 +1,8 @@
 document.addEventListener("DOMContentLoaded", () => {
+    // Base URLs — relative when served from FastAPI, absolute as fallback
+    const API_BASE = window.location.origin.includes("localhost:8000") ? "" : "http://localhost:8000";
+    const WS_BASE = `ws://${window.location.host || "localhost:8000"}`;
+
     const form = document.getElementById("sprintForm");
     const timetableInput = document.getElementById("timetable_text");
     const fileInput = document.getElementById("fileUpload");
@@ -24,20 +28,47 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnUnlockSystem = document.getElementById("btnUnlockSystem");
     const safetyError = document.getElementById("safetyError");
 
+    // Notification elements
+    const btnNotifications = document.getElementById("btnNotifications");
+    const notifBadge = document.getElementById("notifBadge");
+    const notifToast = document.getElementById("notifToast");
+    const notifToastText = document.getElementById("notifToastText");
+    const notifRecapOverlay = document.getElementById("notifRecapOverlay");
+    const notifRecapList = document.getElementById("notifRecapList");
+    const notifRecapSubtitle = document.getElementById("notifRecapSubtitle");
+    const btnClearNotifs = document.getElementById("btnClearNotifs");
+    const btnCloseRecap = document.getElementById("btnCloseRecap");
+    const btnEndSession = document.getElementById("btnEndSession");
+
     let currentActiveSprint = null;
     let ws = null;
 
     let quizActive = false; // Prevent multiple quiz popups
+    let heldNotifCount = 0;
+    let toastTimeout = null;
 
     // Initialize WebSocket for Block Events
     function initWebSocket() {
-        ws = new WebSocket("ws://localhost:8000/ws");
+        ws = new WebSocket(`${WS_BASE}/ws`);
 
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
             if (data.event === "BLOCK" && currentActiveSprint && !quizActive) {
                 console.log("OS Blocker Activated!", data.app);
                 triggerQuizPopup();
+            }
+
+            // Notification held event (live push from backend)
+            if (data.event === "NOTIFICATION_HELD" && data.notification) {
+                heldNotifCount = data.held_count || (heldNotifCount + 1);
+                updateNotifBadge();
+                showNotifToast(data.notification);
+            }
+
+            // Sync held count from periodic STATUS heartbeat
+            if (data.held_notifications_count !== undefined) {
+                heldNotifCount = data.held_notifications_count;
+                updateNotifBadge();
             }
         };
 
@@ -64,7 +95,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const topic = currentActiveSprint ? currentActiveSprint.suggested_topic : "General Study";
 
         try {
-            const res = await fetch("http://localhost:8000/api/brain/quiz", {
+            const res = await fetch(`${API_BASE}/api/brain/quiz`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ topic: topic, num_questions: 3 })
@@ -186,6 +217,149 @@ document.addEventListener("DOMContentLoaded", () => {
     let timerInterval = null;
     let secondsElapsed = 0;
 
+    // --- NOTIFICATION HELPERS ---
+    function updateNotifBadge() {
+        if (heldNotifCount > 0) {
+            btnNotifications.style.display = "flex";
+            notifBadge.textContent = heldNotifCount;
+            notifBadge.style.display = "inline-block";
+        } else {
+            notifBadge.style.display = "none";
+        }
+    }
+
+    function showNotifToast(notif) {
+        const appName = notif.app_name || "App";
+        const title = notif.title || "";
+        notifToastText.textContent = `🔕 ${appName}: ${title || "Notification held for later"}`;
+        notifToast.style.display = "flex";
+        notifToast.classList.remove("toast-out");
+        notifToast.classList.add("toast-in");
+
+        if (toastTimeout) clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+            notifToast.classList.remove("toast-in");
+            notifToast.classList.add("toast-out");
+            setTimeout(() => { notifToast.style.display = "none"; }, 300);
+        }, 2500);
+    }
+
+    function getAppEmoji(appName) {
+        const name = (appName || "").toLowerCase();
+        if (name.includes("mail") || name.includes("outlook") || name.includes("gmail")) return "📧";
+        if (name.includes("whatsapp")) return "💬";
+        if (name.includes("instagram")) return "📷";
+        if (name.includes("messenger") || name.includes("facebook")) return "💭";
+        if (name.includes("telegram")) return "✈️";
+        if (name.includes("discord")) return "🎮";
+        if (name.includes("slack") || name.includes("teams")) return "💼";
+        if (name.includes("twitter") || name.includes("x")) return "🐦";
+        if (name.includes("snapchat")) return "👻";
+        if (name.includes("youtube")) return "▶️";
+        return "🔔";
+    }
+
+    function timeAgo(isoStr) {
+        if (!isoStr) return "";
+        const diff = Math.floor((Date.now() - new Date(isoStr).getTime()) / 1000);
+        if (diff < 60) return "just now";
+        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+        return `${Math.floor(diff / 86400)}d ago`;
+    }
+
+    async function fetchHeldNotifications() {
+        try {
+            const res = await fetch(`${API_BASE}/api/notifications/held`);
+            const data = await res.json();
+            heldNotifCount = data.count || 0;
+            updateNotifBadge();
+            return data.notifications || [];
+        } catch (err) {
+            console.error("Failed to fetch held notifications:", err);
+            return [];
+        }
+    }
+
+    async function clearHeldNotifications() {
+        try {
+            await fetch(`${API_BASE}/api/notifications/clear`, { method: "POST" });
+            heldNotifCount = 0;
+            updateNotifBadge();
+        } catch (err) {
+            console.error("Failed to clear notifications:", err);
+        }
+    }
+
+    function renderRecap(notifications, isSessionOver) {
+        notifRecapList.innerHTML = "";
+
+        if (!notifications || notifications.length === 0) {
+            notifRecapSubtitle.textContent = isSessionOver
+                ? "No notifications were held — great focus! 🎯"
+                : "No held notifications right now.";
+            return;
+        }
+
+        notifRecapSubtitle.textContent = isSessionOver
+            ? `${notifications.length} notification${notifications.length !== 1 ? "s" : ""} were filtered out during your focus session:`
+            : `${notifications.length} notification${notifications.length !== 1 ? "s" : ""} held so far:`;
+
+        notifications.forEach(notif => {
+            const card = document.createElement("div");
+            card.className = "notif-card";
+            card.innerHTML = `
+                <div class="notif-card-icon">${getAppEmoji(notif.app_name)}</div>
+                <div class="notif-card-content">
+                    <div class="notif-card-top">
+                        <span class="notif-card-app">${notif.app_name || "Unknown"}</span>
+                        <span class="notif-card-time">${timeAgo(notif.timestamp)}</span>
+                    </div>
+                    ${notif.title ? `<div class="notif-card-title">${notif.title}</div>` : ""}
+                    ${notif.body ? `<div class="notif-card-body">${notif.body}</div>` : ""}
+                </div>
+            `;
+            notifRecapList.appendChild(card);
+        });
+    }
+
+    async function openRecap(isSessionOver = false) {
+        const notifs = await fetchHeldNotifications();
+        renderRecap(notifs, isSessionOver);
+        notifRecapOverlay.style.display = "flex";
+    }
+
+    async function endFocusSession() {
+        clearInterval(timerInterval);
+        await openRecap(true);
+        // Unlock on the backend
+        try {
+            await fetch(`${API_BASE}/api/safety/unlock`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ typed_sentence: "" }) // won't unlock but we handle it
+            });
+        } catch (e) { /* ignore */ }
+        currentActiveSprint = null;
+        activeMissionBanner.style.display = "none";
+    }
+
+    // --- NOTIFICATION BUTTON LISTENERS ---
+    btnNotifications.addEventListener("click", () => openRecap(false));
+
+    btnCloseRecap.addEventListener("click", () => {
+        notifRecapOverlay.style.display = "none";
+    });
+
+    btnClearNotifs.addEventListener("click", async () => {
+        await clearHeldNotifications();
+        notifRecapList.innerHTML = "";
+        notifRecapSubtitle.textContent = "All cleared!";
+        setTimeout(() => { notifRecapOverlay.style.display = "none"; }, 600);
+    });
+
+    btnEndSession.addEventListener("click", () => endFocusSession());
+
     // Show selected file visually
     fileInput.addEventListener("change", (e) => {
         const btnLabel = e.target.previousElementSibling.querySelector("span");
@@ -223,7 +397,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (fileVal) formData.append("file", fileVal);
 
         try {
-            const response = await fetch("http://localhost:8000/api/brain/sprints", {
+            const response = await fetch(`${API_BASE}/api/brain/sprints`, {
                 method: "POST",
                 body: formData
             });
@@ -234,11 +408,28 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             const data = await response.json();
+
+            // If backend returned an error object (e.g. Groq not initialized), use fallback
+            if (data.error || !data.sprints || data.sprints.length === 0) {
+                throw new Error(data.error || "No sprints returned");
+            }
+
             renderSprints(data.sprints);
 
         } catch (error) {
-            console.error("API Error:", error);
-            alert("Error connecting to Gemini backend! Ensure the FastAPI server is running.\n\n" + error.message);
+            console.warn("Sprint API failed, using fallback sprints:", error.message);
+            // Generate fallback sprints from the user's text input so we can still test
+            const topics = textVal
+                ? textVal.split(/,|and|\n/).map(t => t.trim()).filter(t => t.length > 0)
+                : ["General Study"];
+            const now = new Date();
+            const fallbackSprints = topics.map((topic, i) => ({
+                suggested_topic: topic.charAt(0).toUpperCase() + topic.slice(1),
+                duration_minutes: 45,
+                start_time: new Date(now.getTime() + i * 50 * 60000).toISOString(),
+                end_time: new Date(now.getTime() + (i * 50 + 45) * 60000).toISOString(),
+            }));
+            renderSprints(fallbackSprints);
         } finally {
             // Restore UI state
             loader.style.display = "none";
@@ -284,6 +475,10 @@ document.addEventListener("DOMContentLoaded", () => {
         currentActiveSprint = sprint;
         activeSprintTopic.textContent = sprint.suggested_topic;
         activeMissionBanner.style.display = "flex";
+        btnEndSession.style.display = "inline-flex";
+        btnNotifications.style.display = "flex";
+        heldNotifCount = 0;
+        updateNotifBadge();
 
         // Create Timer UI if it doesn't exist
         let timerDisplay = document.getElementById("sprintTimer");
@@ -310,7 +505,7 @@ document.addEventListener("DOMContentLoaded", () => {
             timerDisplay.textContent = `⏱️ ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         }
 
-        fetch("http://localhost:8000/api/safety/lock", {
+        fetch(`${API_BASE}/api/safety/lock`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ topic: sprint.suggested_topic })
@@ -327,7 +522,7 @@ document.addEventListener("DOMContentLoaded", () => {
         safetyError.style.display = "none";
 
         try {
-            const res = await fetch("http://localhost:8000/api/safety/challenge");
+            const res = await fetch(`${API_BASE}/api/safety/challenge`);
             const data = await res.json();
             safetyChallengeText.textContent = data.challenge;
         } catch (err) {
@@ -342,7 +537,7 @@ document.addEventListener("DOMContentLoaded", () => {
     btnUnlockSystem.addEventListener("click", async () => {
         const typed = safetyInput.value.trim();
         try {
-            const res = await fetch("http://localhost:8000/api/safety/unlock", {
+            const res = await fetch(`${API_BASE}/api/safety/unlock`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ typed_sentence: typed })

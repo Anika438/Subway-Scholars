@@ -1,0 +1,208 @@
+/* ── Character Container (centered, bottom of screen) ── */
+.character-container {
+  position: absolute;
+  bottom: 12%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.character {
+  position: relative;
+  width: 56px;
+  height: 110px;
+}
+
+/* ── Head (back view — no face, just hair & cap) ── */
+.char-head {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 28px;
+  background: #d4a373;
+  border-radius: 50%;
+  z-index: 4;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+.char-hair {
+  position: absolute;
+  inset: -1px -2px auto -2px;
+  height: 18px;
+  background: #2c1810;
+  border-radius: 50% 50% 30% 30%;
+  z-index: 1;
+}
+
+.char-cap {
+  position: absolute;
+  top: -5px;
+  left: -3px;
+  width: 34px;
+  height: 14px;
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  border-radius: 50% 50% 20% 20%;
+  z-index: 2;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* ── Body (hoodie seen from back) ── */
+.char-body {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 34px;
+  height: 38px;
+  z-index: 3;
+}
+
+.char-hoodie {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(180deg, #2c3e50 0%, #34495e 60%, #2c3e50 100%);
+  border-radius: 6px 6px 3px 3px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  /* Subtle back seam */
+  border-left: 1px solid #243342;
+  border-right: 1px solid #243342;
+}
+
+.char-hoodie::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  height: 26px;
+  background: rgba(0,0,0,0.15);
+}
+
+/* ── Backpack ── */
+.char-backpack {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 28px;
+  background: linear-gradient(180deg, #e67e22, #d35400);
+  border-radius: 5px 5px 4px 4px;
+  z-index: 5;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.35);
+}
+
+.backpack-pocket {
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 10px;
+  background: #c0392b;
+  border-radius: 3px;
+}
+
+/* ── Arms (swinging, attached to body sides) ── */
+.char-arm {
+  position: absolute;
+  top: 28px;
+  width: 10px;
+  height: 32px;
+  background: linear-gradient(180deg, #2c3e50, #34495e);
+  border-radius: 5px;
+  z-index: 2;
+  transform-origin: top center;
+}
+
+.char-arm-l {
+  left: 2px;
+  animation: swingArmL 0.32s ease-in-out infinite alternate;
+}
+
+.char-arm-r {
+  right: 2px;
+  animation: swingArmR 0.32s ease-in-out infinite alternate;
+}
+
+@keyframes swingArmL {
+  0% { transform: rotate(-30deg) translateY(0); }
+  100% { transform: rotate(30deg) translateY(-2px); }
+}
+
+@keyframes swingArmR {
+  0% { transform: rotate(30deg) translateY(-2px); }
+  100% { transform: rotate(-30deg) translateY(0); }
+}
+
+/* ── Legs (running stride, back view) ── */
+.char-leg {
+  position: absolute;
+  top: 60px;
+  width: 12px;
+  height: 36px;
+  background: linear-gradient(180deg, #1a252f, #2c3e50);
+  border-radius: 5px 5px 3px 3px;
+  z-index: 1;
+  transform-origin: top center;
+}
+
+.char-leg-l {
+  left: 13px;
+  animation: runLegL 0.32s ease-in-out infinite alternate;
+}
+
+.char-leg-r {
+  right: 13px;
+  animation: runLegR 0.32s ease-in-out infinite alternate;
+}
+
+@keyframes runLegL {
+  0% { transform: rotate(-28deg); }
+  100% { transform: rotate(28deg); }
+}
+
+@keyframes runLegR {
+  0% { transform: rotate(28deg); }
+  100% { transform: rotate(-28deg); }
+}
+
+/* ── Shoes ── */
+.char-shoe {
+  position: absolute;
+  top: 92px;
+  width: 14px;
+  height: 8px;
+  background: #f39c12;
+  border-radius: 3px 8px 3px 3px;
+  z-index: 1;
+  transform-origin: top center;
+}
+
+.char-shoe-l {
+  left: 11px;
+  animation: runLegL 0.32s ease-in-out infinite alternate;
+}
+
+.char-shoe-r {
+  right: 11px;
+  animation: runLegR 0.32s ease-in-out infinite alternate;
+}
+
+/* ── Shadow (on the ground below character) ── */
+.char-shadow {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 48px;
+  height: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 50%;
+  filter: blur(4px);
+  z-index: 0;
+}
