@@ -1,0 +1,3 @@
+icalendar
+google-genai
+pydantic

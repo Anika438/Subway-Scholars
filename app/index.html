@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subway Scholars - Focus Run</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+
+    <div class="bg-lines"></div>
+
+    <header>
+        <h1 class="logo">Subway <span>Scholars</span></h1>
+        <div class="subtitle">Hack Your Focus. Run Your Sprints.</div>
+
+        <div id="activeMissionBanner" class="active-mission-banner" style="display: none;">
+            <div class="active-info">
+                <span class="pulse-dot"></span>
+                <strong>Active Quest:</strong> <span id="activeSprintTopic">German</span>
+            </div>
+            <button id="btnEmergencyExit" class="btn-danger"><i class="fa-solid fa-triangle-exclamation"></i> Emergency
+                Exit</button>
+        </div>
+    </header>
+
+    <main>
+        <!-- AI Intelligence Panel -->
+        <div class="glass-panel">
+            <h2 class="panel-title"><i class="fa-solid fa-bolt"></i> Generate Missions</h2>
+
+            <form id="sprintForm" class="input-group">
+                <label for="timetable_text">What's your plan today?</label>
+                <textarea id="timetable_text" name="timetable_text"
+                    placeholder="e.g. Wake up at 8 AM. Classes from 9 AM to 12 PM. Or simply: I want to study german and math..."></textarea>
+
+                <div class="or-divider">OR UPLOAD ICS</div>
+
+                <div class="file-upload-wrapper">
+                    <label for="fileUpload" class="btn-upload">
+                        <i class="fa-solid fa-calendar-plus"></i>
+                        <span>Select Calendar File</span>
+                    </label>
+                    <input type="file" id="fileUpload" name="file" accept=".ics">
+                </div>
+
+                <button type="submit" class="btn-mains" id="generateBtn">
+                    <i class="fa-solid fa-rocket"></i> Generate Sprints
+                </button>
+            </form>
+        </div>
+
+        <!-- AI Output Panel -->
+        <div class="glass-panel" id="resultsPanel" style="display: none;">
+            <h2 class="panel-title"><i class="fa-solid fa-crosshairs"></i> Your Active Quests</h2>
+
+            <div id="loader" class="loader-container">
+                <div class="loader"></div>
+            </div>
+
+            <div id="sprintsList" class="sprints-container">
+                <!-- Sprints dynamic injection -->
+            </div>
+
+            <div id="emptyState" class="empty-state">
+                <i class="fa-regular fa-calendar-xmark"></i>
+                <p>No gaps found! Try providing a looser schedule.</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Quiz Overlay (Distraction Block) -->
+    <div id="quizOverlay" class="fullscreen-overlay" style="display: none;">
+        <div class="overlay-panel">
+            <h2 class="danger-title"><i class="fa-solid fa-hand"></i> DISTRACTION BLOCKED!</h2>
+            <p>You tried to open a blacklisted app during your focus run!</p>
+            <p class="quiz-instruction">Defeat this challenge to proceed:</p>
+
+            <div id="quizLoader" class="loader-container" style="display: none;">
+                <div class="loader"></div>
+            </div>
+
+            <div id="quizContainer" class="quiz-container">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Safety Exit Overlay -->
+    <div id="safetyOverlay" class="fullscreen-overlay" style="display: none;">
+        <div class="overlay-panel border-accent">
+            <h2 class="accent-title"><i class="fa-solid fa-shield-halved"></i> Safety Exit</h2>
+            <p>Type the following sentence exactly to disable the focus lock:</p>
+            <div class="challenge-box" id="safetyChallengeText">Loading challenge...</div>
+            <input type="text" id="safetyInput" class="safety-input" placeholder="Type here..." autocomplete="off">
+            <div class="safety-actions">
+                <button id="btnCancelSafety" class="btn-secondary">Cancel</button>
+                <button id="btnUnlockSystem" class="btn-primary">Unlock System</button>
+            </div>
+            <p id="safetyError" class="error-msg" style="display: none;">Typing test failed. Try again.</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
