@@ -43,7 +43,8 @@ system_state = {
     "unlocked": False,
     "current_challenge": "",
     "is_blocking": False, # Prevent multiple tk windows
-    "active_topic": "General Study"
+    "active_topic": "General Study",
+    "monitoring_active": False # Only True after user clicks a sprint
 }
 
 class UnlockRequest(BaseModel):
@@ -63,6 +64,7 @@ async def unlock_system(request: UnlockRequest):
         
     if request.typed_sentence == system_state["current_challenge"]:
         system_state["unlocked"] = True
+        system_state["monitoring_active"] = False
         return {"success": True, "message": "System unlocked successfully. You can safely exit."}
     
     return {"success": False, "message": "Typing test failed. Try again."}
@@ -77,6 +79,8 @@ async def lock_system(request: dict = None):
     system_state["unlocked"] = False
     system_state["current_challenge"] = ""
     system_state["active_topic"] = topic
+    system_state["monitoring_active"] = True
+    print(f"🔒 System locked. Monitoring active for topic: {topic}", flush=True)
     return {"success": True, "message": "System locked. Monitoring resumed."}
 
 # --- Brain Integration Endpoints ---
@@ -135,52 +139,60 @@ async def filter_notification_endpoint(request: NotificationRequest):
     is_relevant = intelligence.filter_notification(request.notification_text, request.current_topic)
     return {"is_relevant": is_relevant}
 
-# --- WebSocket & OS Blocker ---
+# --- Background Distraction Monitor ---
 
 def launch_os_blocker_sync(topic):
     """Wrapper to run tkinter in main thread context successfully without freezing asyncio."""
-    print("Launching OS Focus Blocker UI...")
+    print("Launching OS Focus Blocker UI...", flush=True)
     subprocess.run([sys.executable, "blocker_ui.py", topic])
-    print("OS Focus Blocker UI sequence passed. Giving 10s grace period...")
+    print("OS Focus Blocker UI sequence passed. Giving 10s grace period...", flush=True)
     time.sleep(10)
     system_state["is_blocking"] = False
 
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket connection that pushes BLOCK events when distracting apps are open."""
-    await websocket.accept()
-    try:
-        while True:
-            if not system_state["unlocked"] and not system_state["is_blocking"]:
-                # Get the currently active window title
+def distraction_monitor_loop():
+    """Background thread that continuously scans active windows for blacklisted apps.
+    Only runs when monitoring_active is True (after user clicks a sprint card)."""
+    print("Distraction Monitor Thread Started.", flush=True)
+    while True:
+        try:
+            if system_state["monitoring_active"] and not system_state["unlocked"] and not system_state["is_blocking"]:
                 try:
                     active_window = gw.getActiveWindow()
                 except Exception:
                     active_window = None
                 if active_window is not None:
                     title = active_window.title.lower()
-                    # Check against the blacklist
                     if any(app_name in title for app_name in BLACKLIST):
-                        # Block!
+                        print(f"Distraction detected: '{title}'. Launching blocker!", flush=True)
                         system_state["is_blocking"] = True
-                        
-                        # Tell frontend
-                        await websocket.send_json({
-                            "event": "BLOCK", 
-                            "app": title,
-                            "message": "Distracting application detected!"
-                        })
-                        
-                        # Launch OS overlay in background thread
                         threading.Thread(
-                            target=launch_os_blocker_sync, 
-                            args=(system_state["active_topic"],), 
+                            target=launch_os_blocker_sync,
+                            args=(system_state["active_topic"],),
                             daemon=True
                         ).start()
-                        
-            # Check every second
-            await asyncio.sleep(1)
-            
+        except Exception as e:
+            print(f"Monitor error: {e}", flush=True)
+        time.sleep(1)
+
+# Start the monitor thread when the server boots
+monitor_thread = threading.Thread(target=distraction_monitor_loop, daemon=True)
+monitor_thread.start()
+
+# --- WebSocket (for frontend status updates only) ---
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket connection for frontend status updates."""
+    await websocket.accept()
+    try:
+        while True:
+            await asyncio.sleep(5)
+            await websocket.send_json({
+                "event": "STATUS",
+                "unlocked": system_state["unlocked"],
+                "is_blocking": system_state["is_blocking"],
+                "active_topic": system_state["active_topic"]
+            })
     except WebSocketDisconnect:
         print("Client disconnected from WebSocket.")
 
@@ -188,3 +200,4 @@ if __name__ == "__main__":
     import uvicorn
     # Use to run the app: python main.py
     uvicorn.run("main:app", host="localhost", port=8000, reload=True)
+
