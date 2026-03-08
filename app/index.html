@@ -15,22 +15,59 @@
     <div class="bg-lines"></div>
 
     <header>
-        <h1 class="logo">Subway <span>Scholars</span></h1>
-        <div class="subtitle">Hack Your Focus. Run Your Sprints.</div>
+        <div style="flex: 1;"></div>
+        <div style="flex: 2; text-align: center;">
+            <h1 class="logo">Subway <span>Scholars</span></h1>
+            <div class="subtitle">Hack Your Focus. Run Your Sprints.</div>
+        </div>
+        <div style="flex: 1; text-align: right;">
+        </div>
+
+        <div class="profile-corner">
+            <button class="btn-primary" onclick="window.location.href='profile.html'"><i class="fa-solid fa-user"></i>
+                Profile</button>
+        </div>
 
         <div id="activeMissionBanner" class="active-mission-banner" style="display: none;">
             <div class="active-info">
                 <span class="pulse-dot"></span>
                 <strong>Active Quest:</strong> <span id="activeSprintTopic">German</span>
             </div>
-            <button id="btnEndSession" class="btn-end-session"><i class="fa-solid fa-flag-checkered"></i> End Session</button>
-            <button id="btnNotifications" class="btn-notif" style="display: none;">
-                <i class="fa-solid fa-bell"></i>
-                <span id="notifBadge" class="notif-badge" style="display: none;">0</span>
-            </button>
-            <button id="btnEmergencyExit" class="btn-danger"><i class="fa-solid fa-triangle-exclamation"></i> Emergency
-                Exit</button>
-        </div>
+            <div class="score-display" id="scoreDisplayContainer"
+                style="display: none; margin: 0 15px; font-weight: bold; color: #00E676;">
+                <i class="fa-solid fa-bolt"></i> Score: <span id="liveScore">0</span> (<span
+                    id="scoreMultiplier">1.0</span>x)
+            </div>
+
+            <div class="banner-actions">
+                <div class="pause-dropdown">
+                    <button class="btn-secondary dropbtn" id="btnPauseSession"><i class="fa-solid fa-pause"></i>
+                        Pause</button>
+                    <div class="pause-content">
+                        <a href="#" class="pause-option" data-mins="5">5 mins</a>
+                        <a href="#" class="pause-option" data-mins="10">10 mins</a>
+                        <a href="#" class="pause-option" data-mins="15">15 mins</a>
+                        <a href="#" class="pause-option" data-mins="20">20 mins</a>
+                    </div>
+                </div>
+
+                <div id="pauseStatusDisplay"
+                    style="display: none; color: #FF9800; font-weight: bold; margin-right: 15px; align-items: center; gap: 5px;">
+                    <i class="fa-solid fa-clock"></i> Paused: <span id="pauseTimerText">00:00</span>
+                    <button id="btnResumeSession" class="btn-secondary"
+                        style="padding: 4px 8px; font-size: 0.8rem; margin-left: 10px;">Resume</button>
+                </div>
+
+                <button id="btnEndSession" class="btn-end-session"><i class="fa-solid fa-flag-checkered"></i> End
+                    Session</button>
+                <button id="btnNotifications" class="btn-notif" style="display: none;">
+                    <i class="fa-solid fa-bell"></i>
+                    <span id="notifBadge" class="notif-badge" style="display: none;">0</span>
+                </button>
+                <button id="btnEmergencyExit" class="btn-danger"><i class="fa-solid fa-triangle-exclamation"></i>
+                    Emergency
+                    Exit</button>
+            </div>
     </header>
 
     <main>
@@ -126,6 +163,22 @@
             <div class="notif-recap-actions">
                 <button id="btnClearNotifs" class="btn-secondary">Clear All</button>
                 <button id="btnCloseRecap" class="btn-primary">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Motivational Overlay -->
+    <div id="motivationalOverlay" class="fullscreen-overlay" style="display: none;">
+        <div class="overlay-panel border-success"
+            style="border-color: #00E676; box-shadow: 0 0 30px rgba(0, 230, 118, 0.6);">
+            <h2 class="success-title"
+                style="color: #00E676; font-family: 'Bungee', cursive; font-size: 2.2rem; margin-bottom: 10px;"><i
+                    class="fa-solid fa-trophy"></i> QUEST COMPLETE!</h2>
+            <p id="motivationalMessage" style="font-size: 1.2rem; margin: 20px 0; color: #fff;">Great job! You crushed
+                it!</p>
+            <div class="safety-actions">
+                <button id="btnMotivationalClose" class="btn-primary"
+                    style="background: #00E676; color: #000; box-shadow: 0 4px 0 #00994d;">Awesome!</button>
             </div>
         </div>
     </div>

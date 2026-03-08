@@ -1,7 +1,26 @@
 document.addEventListener("DOMContentLoaded", () => {
     // Base URLs — relative when served from FastAPI, absolute as fallback
-    const API_BASE = window.location.origin.includes("localhost:8000") ? "" : "http://localhost:8000";
-    const WS_BASE = `ws://${window.location.host || "localhost:8000"}`;
+    const API_BASE = window.location.origin.includes("127.0.0.1:8000") || window.location.origin.includes("localhost:8000") ? "" : "http://127.0.0.1:8000";
+    const WS_BASE = `ws://${window.location.hostname || "127.0.0.1"}:8000`;
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+        window.location.href = "auth.html";
+        return;
+    }
+
+    // Verify token validity with backend
+    fetch(`${API_BASE}/api/auth/verify`, {
+        headers: { "Authorization": `Bearer ${token}` }
+    }).then(async res => {
+        if (!res.ok) {
+            localStorage.removeItem("token");
+            window.location.href = "auth.html";
+        }
+    }).catch(() => {
+        // If network is down, we might want to let them stay and play locally
+        console.warn("Could not verify token due to network error.");
+    });
 
     const form = document.getElementById("sprintForm");
     const timetableInput = document.getElementById("timetable_text");
@@ -16,6 +35,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const activeMissionBanner = document.getElementById("activeMissionBanner");
     const activeSprintTopic = document.getElementById("activeSprintTopic");
     const btnEmergencyExit = document.getElementById("btnEmergencyExit");
+
+    // Scoring elements
+    const liveScoreDisplay = document.getElementById("liveScore");
+    const scoreMultiplierDisplay = document.getElementById("scoreMultiplier");
+    const scoreContainer = document.getElementById("scoreDisplayContainer");
 
     const quizOverlay = document.getElementById("quizOverlay");
     const quizLoader = document.getElementById("quizLoader");
@@ -47,6 +71,23 @@ document.addEventListener("DOMContentLoaded", () => {
     let heldNotifCount = 0;
     let toastTimeout = null;
 
+    // Scoring state
+    let sprintScore = 0;
+    let scoreMultiplier = 1.0;
+
+    // Pause functionality state
+    const btnPauseSession = document.getElementById("btnPauseSession");
+    const pauseDropdown = document.querySelector(".pause-dropdown");
+    const pauseOptions = document.querySelectorAll(".pause-option");
+    const pauseStatusDisplay = document.getElementById("pauseStatusDisplay");
+    const pauseTimerText = document.getElementById("pauseTimerText");
+    const btnResumeSession = document.getElementById("btnResumeSession");
+    const pauseContent = document.querySelector(".pause-content");
+
+    let isPaused = false;
+    let pauseInterval = null;
+    let pauseRemainingSeconds = 0;
+
     // Initialize WebSocket for Block Events
     function initWebSocket() {
         ws = new WebSocket(`${WS_BASE}/ws`);
@@ -55,6 +96,8 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = JSON.parse(event.data);
             if (data.event === "BLOCK" && currentActiveSprint && !quizActive) {
                 console.log("OS Blocker Activated!", data.app);
+                scoreMultiplier = Math.max(0.1, scoreMultiplier - 0.2); // Penalty for distraction
+                updateScoreUI();
                 triggerQuizPopup();
             }
 
@@ -97,7 +140,10 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const res = await fetch(`${API_BASE}/api/brain/quiz`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
                 body: JSON.stringify({ topic: topic, num_questions: 3 })
             });
             const data = await res.json();
@@ -331,17 +377,120 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function endFocusSession() {
         clearInterval(timerInterval);
+        isPaused = false;
+        clearInterval(pauseInterval);
         await openRecap(true);
         // Unlock on the backend
         try {
             await fetch(`${API_BASE}/api/safety/unlock`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
                 body: JSON.stringify({ typed_sentence: "" }) // won't unlock but we handle it
             });
-        } catch (e) { /* ignore */ }
+            // Save sprint if we have data
+            if (currentActiveSprint) {
+                await fetch(`${API_BASE}/api/sprints/save`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        topic: currentActiveSprint.suggested_topic,
+                        duration: currentActiveSprint.duration_minutes,
+                        score: Math.floor(sprintScore)
+                    })
+                });
+                // Remove the sprint card
+                const cards = document.querySelectorAll(".sprint-card");
+                cards.forEach(c => {
+                    if (c.dataset.topic === currentActiveSprint.suggested_topic) {
+                        c.remove();
+                    }
+                });
+            }
+        } catch (e) { console.error("Error saving sprint:", e); }
+
         currentActiveSprint = null;
         activeMissionBanner.style.display = "none";
+        scoreContainer.style.display = "none";
+    }
+
+    async function completeFocusSession() {
+        clearInterval(timerInterval);
+        isPaused = false;
+        clearInterval(pauseInterval);
+
+        // Show motivational popup
+        const messages = [
+            "Sprint done. Go touch some grass.",
+            "Session complete. Time for a breather.",
+            "Mission passed. Respect +100.",
+            "Good work. Now go do something else.",
+            "Task finished. Your brain thanks you."
+        ];
+        const randomMsg = messages[Math.floor(Math.random() * messages.length)];
+
+        const overlay = document.getElementById("motivationalOverlay");
+        const msgEl = document.getElementById("motivationalMessage");
+        if (overlay && msgEl) {
+            msgEl.textContent = randomMsg;
+            overlay.style.display = "flex";
+        }
+
+        const btnClose = document.getElementById("btnMotivationalClose");
+        if (btnClose) {
+            // Unbind previous ones safely
+            const newBtn = btnClose.cloneNode(true);
+            btnClose.parentNode.replaceChild(newBtn, btnClose);
+            newBtn.onclick = async () => {
+                overlay.style.display = "none";
+                await triggerSessionCleanup();
+            };
+        } else {
+            await triggerSessionCleanup(); // Fallback
+        }
+
+        async function triggerSessionCleanup() {
+            await openRecap(true);
+            try {
+                await fetch(`${API_BASE}/api/safety/unlock`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ typed_sentence: "" })
+                });
+                if (currentActiveSprint) {
+                    await fetch(`${API_BASE}/api/sprints/save`, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            topic: currentActiveSprint.suggested_topic,
+                            duration: currentActiveSprint.duration_minutes,
+                            score: Math.floor(sprintScore)
+                        })
+                    });
+                    const cards = document.querySelectorAll(".sprint-card");
+                    cards.forEach(c => {
+                        if (c.dataset.topic === currentActiveSprint.suggested_topic) {
+                            c.remove();
+                        }
+                    });
+                }
+            } catch (e) { console.error("Error saving sprint:", e); }
+
+            currentActiveSprint = null;
+            activeMissionBanner.style.display = "none";
+            scoreContainer.style.display = "none";
+        }
     }
 
     // --- NOTIFICATION BUTTON LISTENERS ---
@@ -359,6 +508,78 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     btnEndSession.addEventListener("click", () => endFocusSession());
+
+    // --- PAUSE LOGIC ---
+    btnPauseSession.addEventListener("click", (e) => {
+        pauseContent.classList.toggle("show");
+    });
+
+    pauseOptions.forEach(option => {
+        option.addEventListener("click", (e) => {
+            e.preventDefault();
+            const mins = parseInt(e.target.getAttribute("data-mins"));
+            startPause(mins);
+            pauseContent.classList.remove("show");
+        });
+    });
+
+    window.addEventListener("click", (e) => {
+        if (!e.target.matches('.dropbtn') && !e.target.closest('.dropbtn')) {
+            if (pauseContent && pauseContent.classList.contains('show')) {
+                pauseContent.classList.remove('show');
+            }
+        }
+    });
+
+    function startPause(mins) {
+        if (isPaused) return; // Prevent multiple pauses overstacking
+        isPaused = true;
+
+        // Tell backend to pause distraction monitor
+        fetch(`${API_BASE}/api/safety/pause`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}` }
+        }).catch(console.error);
+
+        pauseRemainingSeconds = mins * 60;
+
+        pauseDropdown.style.display = "none";
+        pauseStatusDisplay.style.display = "flex";
+        updatePauseTimerUI();
+
+        clearInterval(pauseInterval);
+        pauseInterval = setInterval(() => {
+            pauseRemainingSeconds--;
+            if (pauseRemainingSeconds <= 0) {
+                resumeSession();
+            } else {
+                updatePauseTimerUI();
+            }
+        }, 1000);
+    }
+
+    function resumeSession() {
+        isPaused = false;
+
+        // Tell backend to resume distraction monitor
+        fetch(`${API_BASE}/api/safety/resume`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}` }
+        }).catch(console.error);
+
+        clearInterval(pauseInterval);
+        pauseStatusDisplay.style.display = "none";
+        pauseDropdown.style.display = "inline-block";
+    }
+
+    function updatePauseTimerUI() {
+        const m = Math.floor(pauseRemainingSeconds / 60);
+        const s = pauseRemainingSeconds % 60;
+        pauseTimerText.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+
+    btnResumeSession.addEventListener("click", resumeSession);
+
 
     // Show selected file visually
     fileInput.addEventListener("change", (e) => {
@@ -399,6 +620,9 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const response = await fetch(`${API_BASE}/api/brain/sprints`, {
                 method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${token}`
+                },
                 body: formData
             });
 
@@ -451,6 +675,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const sprintElement = document.createElement("div");
             sprintElement.className = "sprint-card";
+            sprintElement.dataset.topic = sprint.suggested_topic;
             sprintElement.style.animationDelay = `${index * 0.15}s`;
 
             sprintElement.innerHTML = `
@@ -493,10 +718,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
         clearInterval(timerInterval);
         secondsElapsed = 0;
+        sprintScore = 0;
+        scoreMultiplier = 1.0;
+        isPaused = false;
+        clearInterval(pauseInterval);
+        pauseStatusDisplay.style.display = "none";
+        pauseDropdown.style.display = "inline-block";
+        scoreContainer.style.display = "block";
+        updateScoreUI();
         updateTimerDisplay();
+
         timerInterval = setInterval(() => {
-            secondsElapsed++;
-            updateTimerDisplay();
+            if (!isPaused) {
+                secondsElapsed++;
+                if (!quizActive && !systemUnlockedInternally) {
+                    sprintScore += (1 * scoreMultiplier);
+                    updateScoreUI();
+                }
+                updateTimerDisplay();
+
+                // Check for Sprint auto-completion!
+                if (currentActiveSprint && secondsElapsed >= (currentActiveSprint.duration_minutes * 60)) {
+                    completeFocusSession();
+                }
+            }
         }, 1000);
 
         function updateTimerDisplay() {
@@ -505,11 +750,21 @@ document.addEventListener("DOMContentLoaded", () => {
             timerDisplay.textContent = `⏱️ ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         }
 
+        function updateScoreUI() {
+            liveScoreDisplay.textContent = Math.floor(sprintScore);
+            scoreMultiplierDisplay.textContent = scoreMultiplier.toFixed(1);
+        }
+
+        let systemUnlockedInternally = false;
+
         fetch(`${API_BASE}/api/safety/lock`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+            },
             body: JSON.stringify({ topic: sprint.suggested_topic })
-        }).catch(console.error);
+        }).then(() => { systemUnlockedInternally = false; }).catch(console.error);
 
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -539,16 +794,20 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const res = await fetch(`${API_BASE}/api/safety/unlock`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
                 body: JSON.stringify({ typed_sentence: typed })
             });
             const data = await res.json();
 
             if (data.success) {
                 safetyOverlay.style.display = "none";
-                clearInterval(timerInterval);
-                currentActiveSprint = null;
-                alert("System Unlocked! You have exited your focus session.");
+                systemUnlockedInternally = true;
+                scoreMultiplier = Math.max(0.1, scoreMultiplier - 0.5); // BIG Penalty for manual exit
+                updateScoreUI();
+                alert("System Unlocked! You have paused your focus session. Hit 'End Session' to save your score.");
             } else {
                 safetyError.style.display = "block";
                 safetyError.textContent = data.message;

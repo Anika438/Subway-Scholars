@@ -23,13 +23,46 @@ import subprocess
 import threading
 import sys
 import time
+from datetime import datetime, timedelta
+from jose import JWTError, jwt
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends
+
+from database import init_db
+
+SECRET_KEY = "my_super_secret_key_for_subway_scholars"  # In production, use env variable
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 1 week
+
+security = HTTPBearer()
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+import database
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        user_id: int = payload.get("id")
+        if username is None or user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return {"username": username, "id": user_id}
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 app = FastAPI(title="The Guard - Focus Hub")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -48,7 +81,8 @@ system_state = {
     "current_challenge": "",
     "is_blocking": False, # Prevent multiple tk windows
     "active_topic": "General Study",
-    "monitoring_active": False # Only True after user clicks a sprint
+    "monitoring_active": False, # Only True after user clicks a sprint
+    "is_paused": False # True when user clicks pause, stops distraction checks
 }
 
 # ── Notification Monitor ─────────────────────────────────────────
@@ -96,7 +130,7 @@ async def unlock_system(request: UnlockRequest):
     return {"success": False, "message": "Typing test failed. Try again."}
 
 @app.post("/api/safety/lock")
-async def lock_system(request: dict = None):
+async def lock_system(request: dict = None, current_user: dict = Depends(get_current_user)):
     """Relocks the system to resume distraction monitoring."""
     topic = "General Study"
     if request and "topic" in request:
@@ -106,9 +140,112 @@ async def lock_system(request: dict = None):
     system_state["current_challenge"] = ""
     system_state["active_topic"] = topic
     system_state["monitoring_active"] = True
+    system_state["is_paused"] = False
     notification_monitor.start(topic)
     print(f"System locked. Monitoring active for topic: {topic}", flush=True)
     return {"success": True, "message": "System locked. Monitoring resumed."}
+
+@app.post("/api/safety/pause")
+async def pause_system(current_user: dict = Depends(get_current_user)):
+    """Temporarily pauses distraction monitoring."""
+    system_state["is_paused"] = True
+    print("Session PAUSED. Distraction monitoring halted.", flush=True)
+    return {"success": True, "message": "Monitoring paused."}
+
+@app.post("/api/safety/resume")
+async def resume_system(current_user: dict = Depends(get_current_user)):
+    """Resumes distraction monitoring after a pause."""
+    system_state["is_paused"] = False
+    print("Session RESUMED. Distraction monitoring active.", flush=True)
+    return {"success": True, "message": "Monitoring resumed."}
+
+# --- Auth Endpoints ---
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+@app.post("/api/auth/register")
+async def register_user(user: UserCreate):
+    conn = database.get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE username = ?", (user.username,))
+    if c.fetchone():
+        conn.close()
+        raise HTTPException(status_code=400, detail="Username already registered")
+    
+    hashed_password = database.hash_password(user.password)
+    c.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", (user.username, hashed_password))
+    conn.commit()
+    user_id = c.lastrowid
+    conn.close()
+    
+    access_token = create_access_token(data={"sub": user.username, "id": user_id})
+    return {"access_token": access_token, "token_type": "bearer", "username": user.username}
+
+@app.post("/api/auth/login")
+async def login_user(user: UserLogin):
+    conn = database.get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE username = ?", (user.username,))
+    db_user = c.fetchone()
+    conn.close()
+    
+    if not db_user or not database.verify_password(user.password, db_user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
+        
+    access_token = create_access_token(data={"sub": db_user["username"], "id": db_user["id"]})
+    return {"access_token": access_token, "token_type": "bearer", "username": db_user["username"]}
+
+class SprintSaveRequest(BaseModel):
+    topic: str
+    duration: int
+    score: int
+
+@app.post("/api/sprints/save")
+async def save_sprint_endpoint(request: SprintSaveRequest, current_user: dict = Depends(get_current_user)):
+    conn = database.get_db_connection()
+    c = conn.cursor()
+    date_str = datetime.now().isoformat()
+    c.execute(
+        "INSERT INTO sprints (user_id, topic, duration, score, date) VALUES (?, ?, ?, ?, ?)",
+        (current_user["id"], request.topic, request.duration, request.score, date_str)
+    )
+    conn.commit()
+    conn.close()
+    return {"success": True, "message": "Sprint saved"}
+
+@app.get("/api/profile")
+async def get_profile(current_user: dict = Depends(get_current_user)):
+    conn = database.get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM sprints WHERE user_id = ? ORDER BY id DESC", (current_user["id"],))
+    sprints = c.fetchall()
+    
+    total_score = sum(s["score"] for s in sprints) if sprints else 0
+    total_sprints = len(sprints)
+    
+    sprint_list = [
+        {
+            "id": s["id"],
+            "topic": s["topic"],
+            "duration": s["duration"],
+            "score": s["score"],
+            "date": s["date"]
+        } for s in sprints
+    ]
+    conn.close()
+    
+    return {
+        "username": current_user["username"],
+        "total_score": total_score,
+        "total_sprints": total_sprints,
+        "sprints": sprint_list
+    }
 
 # --- Extension Integration Endpoints ---
 
@@ -159,6 +296,10 @@ async def get_quiz(request: QuizRequest):
     
     mcqs = intelligence.generate_mcqs(request.topic, request.num_questions)
     return {"quiz": [mcq.dict() for mcq in mcqs]}
+
+@app.get("/api/auth/verify")
+async def verify_auth(current_user: dict = Depends(get_current_user)):
+    return {"status": "ok", "username": current_user["username"]}
 
 @app.post("/api/brain/sprints")
 async def get_sprints(
@@ -297,68 +438,89 @@ def launch_os_blocker_sync(topic):
     system_state["is_blocking"] = False
 
 def distraction_monitor_loop():
-    """Background thread that continuously scans active windows for blacklisted apps.
-    Only runs when monitoring_active is True (after user clicks a sprint card)."""
+    """Background thread that continuously scans active windows.
+    Only runs when monitoring_active is True. Uses AI to check relevance
+    and aggressively caches results to prevent API spam."""
     print("Distraction Monitor Thread Started.", flush=True)
     pending_distraction_start = None
     last_relevant_title = None
 
+    # Cache format: { "topic_name": { "window_title": is_relevant_bool } }
+    relevance_cache = {}
+
     while True:
         try:
-            if system_state["monitoring_active"] and not system_state["unlocked"] and not system_state["is_blocking"]:
+            if system_state["monitoring_active"] and not system_state["unlocked"] and not system_state["is_blocking"] and not system_state["is_paused"]:
+                current_topic = system_state["active_topic"]
+                if current_topic not in relevance_cache:
+                    relevance_cache[current_topic] = {}
+
                 try:
                     active_window = gw.getActiveWindow()
                 except Exception:
                     active_window = None
+
                 if active_window is not None:
-                    title = active_window.title.lower()
-                    if any(app_name in title for app_name in BLACKLIST):
-                        if title == last_relevant_title:
-                            pass # Already approved this specific window/video
-                        elif pending_distraction_start is None:
-                            pending_distraction_start = time.time()
-                            print(f"Blacklisted app detected: '{title}'. Starting 15s grace period...", flush=True)
-                        elif time.time() - pending_distraction_start > 15:
-                            print(f"Grace period over. Checking relevance for: '{title}'...", flush=True)
-                            
-                            # AI Check for Window Relevance
-                            is_relevant = False
-                            if intelligence:
-                                try:
-                                    is_relevant = intelligence.is_window_relevant(title, system_state["active_topic"])
-                                except Exception as e:
-                                    print(f"Window relevance check failed: {e}", flush=True)
-                            
-                            if not is_relevant:
-                                print(f"Distraction confirmed: '{title}'. Notifying clients!", flush=True)
-                                system_state["is_blocking"] = True
-                                pending_distraction_start = None
-                                # Send BLOCK event to all connected UI clients
-                                import asyncio as _asyncio
-                                try:
-                                    loop = _asyncio.get_event_loop()
-                                    if loop.is_running():
-                                        _asyncio.ensure_future(broadcast_event({
-                                            "event": "BLOCK",
-                                            "app": title,
-                                            "is_blocking": True,
-                                            "active_topic": system_state["active_topic"]
-                                        }))
-                                except Exception as e:
-                                    print(f"WS broadcast error: {e}", flush=True)
-                                # Also launch OS blocker as fallback
-                                threading.Thread(
-                                    target=launch_os_blocker_sync,
-                                    args=(system_state["active_topic"],),
-                                    daemon=True
-                                ).start()
-                            else:
-                                print(f"Window '{title}' deemed relevant to topic '{system_state['active_topic']}'. Allowing.", flush=True)
-                                last_relevant_title = title
-                                pending_distraction_start = None
+                    title = active_window.title.strip()
+                    if title and title != "Program Manager" and title != "Task Switching":
+                        # Fast path: Already confirmed relevant
+                        if title == last_relevant_title or relevance_cache[current_topic].get(title) is True:
+                            pending_distraction_start = None
+                            last_relevant_title = title
+                        else:
+                            # It's an unknown or confirmed bad window, start/continue grace period
+                            if pending_distraction_start is None:
+                                pending_distraction_start = time.time()
+                                print(f"Unknown app detected: '{title}'. Starting 15s grace period...", flush=True)
+                            elif time.time() - pending_distraction_start > 15:
+                                print(f"Grace period over. Checking relevance for: '{title}'...", flush=True)
+                                
+                                # Check if we already know it's a confirmed distraction
+                                is_relevant = relevance_cache[current_topic].get(title)
+
+                                if is_relevant is None: # Not in cache, ask AI
+                                    print(f"Asking AI about '{title}' for topic '{current_topic}'...", flush=True)
+                                    is_relevant = False
+                                    if intelligence:
+                                        try:
+                                            is_relevant = intelligence.is_window_relevant(title, current_topic)
+                                        except Exception as e:
+                                            print(f"Window relevance check failed: {e}", flush=True)
+                                    # Store in cache
+                                    relevance_cache[current_topic][title] = is_relevant
+
+                                if not is_relevant:
+                                    print(f"Distraction confirmed: '{title}'. Notifying clients!", flush=True)
+                                    system_state["is_blocking"] = True
+                                    pending_distraction_start = None
+                                    
+                                    # Send BLOCK event to all connected UI clients
+                                    import asyncio as _asyncio
+                                    try:
+                                        loop = _asyncio.get_event_loop()
+                                        if loop.is_running():
+                                            _asyncio.ensure_future(broadcast_event({
+                                                "event": "BLOCK",
+                                                "app": title,
+                                                "is_blocking": True,
+                                                "active_topic": current_topic
+                                            }))
+                                    except Exception as e:
+                                        print(f"WS broadcast error: {e}", flush=True)
+                                    
+                                    # Also launch OS blocker as fallback
+                                    threading.Thread(
+                                        target=launch_os_blocker_sync,
+                                        args=(current_topic,),
+                                        daemon=True
+                                    ).start()
+                                else:
+                                    print(f"AI deemed '{title}' relevant. Caching and allowing.", flush=True)
+                                    last_relevant_title = title
+                                    pending_distraction_start = None
                     else:
+                        # Empty or basic OS windows don't trigger distractions
                         pending_distraction_start = None
-                        # Don't reset last_relevant_title immediately if they tab out for a second
         except Exception as e:
             print(f"Monitor error: {e}", flush=True)
         time.sleep(1)

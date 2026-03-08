@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subway Scholars - Authentication</title>
+    <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .auth-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: calc(100vh - 120px);
+        }
+
+        .auth-panel {
+            width: 400px;
+            text-align: center;
+        }
+
+        .auth-panel input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            border-radius: 8px;
+        }
+
+        .auth-panel input:focus {
+            outline: none;
+            border-color: #00D4FF;
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        }
+
+        .auth-switch {
+            margin-top: 15px;
+            font-size: 0.9em;
+            color: #aaa;
+            cursor: pointer;
+        }
+
+        .auth-switch:hover {
+            color: #00D4FF;
+        }
+
+        .error-msg {
+            color: #ff3b3b;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="bg-lines"></div>
+
+    <header style="justify-content: center;">
+        <h1 class="logo">Subway <span>Scholars</span></h1>
+    </header>
+
+    <main class="auth-container">
+        <div class="glass-panel auth-panel" id="loginBox">
+            <h2><i class="fa-solid fa-right-to-bracket"></i> Login</h2>
+            <div id="loginError" class="error-msg"></div>
+            <input type="text" id="loginUsername" placeholder="Username" autocomplete="off">
+            <input type="password" id="loginPassword" placeholder="Password">
+            <button class="btn-primary" id="btnLogin" style="width: 100%; margin-top: 15px;">Login</button>
+            <div class="auth-switch" id="showRegister">Need an account? Register</div>
+        </div>
+
+        <div class="glass-panel auth-panel" id="registerBox" style="display: none;">
+            <h2><i class="fa-solid fa-user-plus"></i> Register</h2>
+            <div id="registerError" class="error-msg"></div>
+            <input type="text" id="regUsername" placeholder="Username" autocomplete="off">
+            <input type="password" id="regPassword" placeholder="Password">
+            <input type="password" id="regConfirm" placeholder="Confirm Password">
+            <button class="btn-primary" id="btnRegister" style="width: 100%; margin-top: 15px;">Register</button>
+            <div class="auth-switch" id="showLogin">Already have an account? Login</div>
+        </div>
+    </main>
+
+    <script>
+        const API_BASE = window.location.origin.includes("127.0.0.1:8000") || window.location.origin.includes("localhost:8000") ? "" : "http://127.0.0.1:8000";
+
+        document.getElementById("showRegister").onclick = () => {
+            document.getElementById("loginBox").style.display = "none";
+            document.getElementById("registerBox").style.display = "block";
+        };
+
+        document.getElementById("showLogin").onclick = () => {
+            document.getElementById("registerBox").style.display = "none";
+            document.getElementById("loginBox").style.display = "block";
+        };
+
+        async function handleAuth(url, body, errorElementId) {
+            const errEl = document.getElementById(errorElementId);
+            errEl.style.display = "none";
+            try {
+                const res = await fetch(`${API_BASE}${url}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    localStorage.setItem("token", data.access_token);
+                    localStorage.setItem("username", data.username);
+                    window.location.href = "index.html";
+                } else {
+                    errEl.textContent = data.detail || "Authentication failed.";
+                    errEl.style.display = "block";
+                }
+            } catch (e) {
+                errEl.textContent = "Network error.";
+                errEl.style.display = "block";
+            }
+        }
+
+        document.getElementById("btnLogin").onclick = () => {
+            const u = document.getElementById("loginUsername").value.trim();
+            const p = document.getElementById("loginPassword").value;
+            if (!u || !p) return;
+            handleAuth("/api/auth/login", { username: u, password: p }, "loginError");
+        };
+
+        document.getElementById("btnRegister").onclick = () => {
+            const u = document.getElementById("regUsername").value.trim();
+            const p = document.getElementById("regPassword").value;
+            const c = document.getElementById("regConfirm").value;
+            if (!u || !p) return;
+            if (p !== c) {
+                const err = document.getElementById("registerError");
+                err.textContent = "Passwords do not match.";
+                err.style.display = "block";
+                return;
+            }
+            handleAuth("/api/auth/register", { username: u, password: p }, "registerError");
+        };
+    </script>
+</body>
+
+</html>

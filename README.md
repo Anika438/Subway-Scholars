@@ -2,7 +2,7 @@
 
 Welcome to Subway Scholars, a gamified productivity application that transforms your study schedule into an engaging runner experience.
 
-Take control of your focus time by automatically generating dynamic study sprints using AI, and conquer distractions with an OS-level blocker that forces you to answer academic quizzes if you try to open social media.
+Take control of your focus time by automatically generating dynamic study sprints using AI, and conquer distractions with an OS-level blocker that forces you to answer academic quizzes if you try to slack off.
 
 ---
 
@@ -10,9 +10,11 @@ Take control of your focus time by automatically generating dynamic study sprint
 
 - **AI-Powered Missions**: Upload your `.ics` calendar file, course syllabus, or simply type your study goals. The AI integration automatically maps out your available time and generates focused study sprints.
 - **Gamified Interface**: An arcade-inspired aesthetic with active mission banners and animated timers.
-- **The Guard Blocker**: When an active mission is running, the Python backend continuously monitors your system for distractions (like YouTube or Instagram). If you open them, an un-closable overlay pops up on your screen.
+- **Universal Global Blocker**: When an active mission is running, the Python backend continuously monitors *all* of your active OS windows. If you switch to an application (like YouTube or a video game), the AI evaluates if it is relevant to your sprint. If it determines you are getting distracted for more than 15 seconds, an un-closable overlay pops up on your screen.
 - **AI Penalty Quizzes**: To unlock your screen from the blocker, you must correctly answer 3 AI-generated multiple-choice questions tailored to the specific subject you are currently studying.
-- **Emergency Exit**: If you have a legitimate emergency, you can use the Emergency Exit button in the web app. It requires you to type a randomly generated safety phrase to break your focus streak and unlock the system immediately.
+- **Sprint Management**: You can pause and resume your active sprints (e.g., for a 5, 10, 15, or 20-minute break), during which time the global blocker will safely disengage. Sprints will also automatically end upon completion, displaying a congratulatory message and migrating to your historical "Completed Quests" list.
+- **User Profiles**: Create an account to log in and securely track your Total Points, completed sprints, and study history.
+- **Emergency Exit**: If you have a legitimate emergency while blocked, you can use the Emergency Exit button in the web app. It requires you to type a randomly generated safety phrase to break your focus streak and unlock the system immediately.
 
 ---
 
@@ -39,7 +41,7 @@ To run Subway Scholars locally, you'll need:
 
 2. **Install all Python dependencies:**
    ```bash
-   pip install fastapi uvicorn pydantic python-multipart pygetwindow icalendar python-dotenv groq
+   pip install fastapi uvicorn pydantic python-multipart pygetwindow icalendar python-dotenv groq bcrypt
    ```
 
 3. **Configure your Environment:**
@@ -63,15 +65,10 @@ python main.py
 Leave this terminal window open. The Python guard is now monitoring for API requests and system distractions.
 
 ### 2. Launch the Web App
-Open your file explorer, navigate to `Subway-Scholars/app/`, and double-click `index.html` to open it in your browser.
+Open your file explorer, navigate to `Subway-Scholars/app/`, and double-click `auth.html` to register an account or log in. From there, you will be redirected to the main hub.
 
 ### 3. Start a Mission
 - Type what you want to study into the Mission Board or upload a calendar syllabus.
 - Click **Generate Sprints**.
 - Click on an active sprint card to begin your focus timer.
-
----
-
-## Notes on the OS Blocker
-- By default, the blocker looks for window titles containing "youtube" or "instagram". You can add more restricted apps to the `BLACKLIST` variable at the top of `bouncer/main.py`.
-- The pop-up quiz will pause the OS monitoring for 15 seconds after a successful unlock, giving you enough time to close the distracting window before it catches you again.
+- The Global Blocker will now continually assess whatever application you have focused against your active topic.

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subway Scholars - Profile</title>
+    <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .profile-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: inset 0 0 15px rgba(0, 212, 255, 0.1);
+        }
+
+        .stat-card h3 {
+            color: #aaa;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .stat-card .value {
+            font-size: 2.5em;
+            color: #00D4FF;
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+            font-weight: bold;
+        }
+
+        .history-list {
+            margin-top: 20px;
+        }
+
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid #FF9800;
+        }
+
+        .history-item .topic {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .history-item .meta {
+            color: #aaa;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        .history-item .score {
+            font-size: 1.5em;
+            color: #00E676;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="bg-lines"></div>
+
+    <header>
+        <h1 class="logo">Subway <span>Scholars</span></h1>
+        <div>
+            <button class="btn-secondary" onclick="window.location.href='index.html'"><i
+                    class="fa-solid fa-arrow-left"></i> Back to Hub</button>
+            <button class="btn-danger" id="btnLogout" style="margin-left: 10px;"><i
+                    class="fa-solid fa-right-from-bracket"></i> Logout</button>
+        </div>
+    </header>
+
+    <main>
+        <div class="glass-panel">
+            <div class="profile-header">
+                <h2><i class="fa-solid fa-user-astronaut"></i> Agent <span id="usernameDisplay">...</span></h2>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total Score</h3>
+                    <div class="value" id="totalScore">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Sprints Completed</h3>
+                    <div class="value" id="totalSprints">0</div>
+                </div>
+            </div>
+
+            <h3><i class="fa-solid fa-clock-rotate-left"></i> Sprint History</h3>
+            <div id="loader" class="loader-container">
+                <div class="loader"></div>
+            </div>
+
+            <div class="history-list" id="historyList" style="display: none;">
+                <!-- Injected via JS -->
+            </div>
+            <div id="emptyState" class="empty-state" style="display: none;">
+                <i class="fa-solid fa-ghost"></i>
+                <p>No completed sprints yet. Time to get to work!</p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API_BASE = window.location.origin.includes("127.0.0.1:8000") || window.location.origin.includes("localhost:8000") ? "" : "http://127.0.0.1:8000";
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+            window.location.href = "auth.html";
+        }
+
+        document.getElementById("btnLogout").onclick = () => {
+            localStorage.removeItem("token");
+            localStorage.removeItem("username");
+            window.location.href = "auth.html";
+        };
+
+        async function loadProfile() {
+            try {
+                const res = await fetch(`${API_BASE}/api/profile`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+
+                if (res.status === 401) {
+                    localStorage.removeItem("token");
+                    window.location.href = "auth.html";
+                    return;
+                }
+
+                const data = await res.json();
+
+                document.getElementById("usernameDisplay").textContent = data.username;
+                document.getElementById("totalScore").textContent = data.total_score;
+                document.getElementById("totalSprints").textContent = data.total_sprints;
+
+                document.getElementById("loader").style.display = "none";
+                const historyList = document.getElementById("historyList");
+
+                if (!data.sprints || data.sprints.length === 0) {
+                    document.getElementById("emptyState").style.display = "block";
+                } else {
+                    historyList.style.display = "block";
+                    data.sprints.forEach(s => {
+                        const dateObj = new Date(s.date);
+                        const displayDate = dateObj.toLocaleDateString() + " " + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                        const item = document.createElement("div");
+                        item.className = "history-item";
+                        item.innerHTML = `
+                            <div>
+                                <div class="topic">${s.topic}</div>
+                                <div class="meta"><i class="fa-solid fa-stopwatch"></i> ${s.duration}m | ${displayDate}</div>
+                            </div>
+                            <div class="score">+${s.score}</div>
+                        `;
+                        historyList.appendChild(item);
+                    });
+                }
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById("loader").style.display = "none";
+                document.getElementById("emptyState").style.display = "block";
+                document.getElementById("emptyState").querySelector("p").textContent = "Error loading profile.";
+            }
+        }
+
+        loadProfile();
+    </script>
+</body>
+
+</html>

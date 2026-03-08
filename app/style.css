@@ -116,6 +116,14 @@ main {
   gap: 30px;
 }
 
+/* Profile Corner */
+.profile-corner {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 100;
+}
+
 /* Glassmorphism Panels */
 .glass-panel {
   background: var(--color-surface);
@@ -750,8 +758,16 @@ textarea::placeholder {
 }
 
 @keyframes badge-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.15); box-shadow: 0 0 14px rgba(255, 59, 59, 0.8); }
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 0 14px rgba(255, 59, 59, 0.8);
+  }
 }
 
 /* End Session button */
@@ -774,6 +790,50 @@ textarea::placeholder {
   background: rgba(0, 230, 118, 0.15);
   border-color: var(--color-secondary);
   color: var(--color-secondary);
+}
+
+/* Pause Dropdown */
+.pause-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.pause-content {
+  display: none;
+  position: absolute;
+  background-color: var(--color-bg);
+  min-width: 120px;
+  box-shadow: var(--shadow-panel);
+  z-index: 10;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--border-radius-sm);
+  top: 100%;
+  /* Drop down below button */
+  margin-top: 10px;
+}
+
+.pause-dropdown:hover .pause-content,
+.pause-content.show {
+  display: block;
+}
+
+.pause-option {
+  color: var(--color-text);
+  padding: 10px 15px;
+  text-decoration: none;
+  display: block;
+  font-family: var(--font-body);
+  transition: all 0.2s;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.pause-option:last-child {
+  border-bottom: none;
+}
+
+.pause-option:hover {
+  background-color: var(--color-surface-hover);
+  color: var(--color-primary);
 }
 
 /* ── Held Notification Toast ── */
@@ -812,13 +872,27 @@ textarea::placeholder {
 }
 
 @keyframes toast-slide-in {
-  from { transform: translateX(-50%) translateY(20px); opacity: 0; }
-  to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
+  from {
+    transform: translateX(-50%) translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
 }
 
 @keyframes toast-slide-out {
-  from { transform: translateX(-50%) translateY(0);    opacity: 1; }
-  to   { transform: translateX(-50%) translateY(20px); opacity: 0; }
+  from {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateX(-50%) translateY(20px);
+    opacity: 0;
+  }
 }
 
 /* ── Notification Recap Overlay ── */
