@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Subway Scholars</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #111827;
+            color: #fff;
+            width: 300px;
+            padding: 15px;
+            margin: 0;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 20px;
+            color: #FF9800;
+            margin-top: 5px;
+            margin-bottom: 20px;
+        }
+
+        #status-container {
+            background-color: #1e293b;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .status-title {
+            font-size: 14px;
+            color: #9CA3AF;
+            margin-bottom: 5px;
+        }
+
+        .status-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #00E676;
+        }
+
+        .status-value.inactive {
+            color: #9CA3AF;
+        }
+
+        .error {
+            color: #ff3b3b;
+            font-size: 14px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        #setup-view {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 80px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: #fff;
+            padding: 8px;
+            box-sizing: border-box;
+            resize: none;
+            font-family: inherit;
+        }
+
+        .btn {
+            background: #FF9800;
+            color: #111;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .btn:hover {
+            background: #ffa726;
+        }
+
+        .btn:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .btn-danger {
+            background: #ff3b3b;
+            color: white;
+            margin-top: 15px;
+        }
+
+        .btn-danger:hover {
+            background: #ff5252;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>SUBWAY SCHOLARS</h1>
+
+    <!-- Setup View -->
+    <div id="setup-view">
+        <textarea id="timetable-input" placeholder="e.g. Maths: 45 mins. German: 30 mins..."></textarea>
+        <button id="btn-generate" class="btn">Start Sprints</button>
+        <div id="loading" style="display: none; color: #00D4FF; margin-top: 5px;">Generating...</div>
+        <div id="error-msg" class="error"></div>
+    </div>
+
+    <!-- Active Sprint View -->
+    <div id="active-view" style="display: none;">
+        <div id="status-container">
+            <div class="status-title">Current Quest</div>
+            <div id="sprint-topic" class="status-value">Loading...</div>
+            <div style="margin-top: 10px;">
+                <span style="color: #9CA3AF; font-size: 13px;">Time Left:</span>
+                <span id="time-val" style="color: #00D4FF; font-weight: bold; font-size: 18px;">--:--</span>
+            </div>
+        </div>
+        <button id="btn-end" class="btn btn-danger w-100" style="width: 100%;">End Sprint</button>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>

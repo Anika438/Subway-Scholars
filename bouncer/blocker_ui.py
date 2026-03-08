@@ -20,8 +20,8 @@ class SubwayBlockerUI:
         self.root.title("Focus Blocker")
         
         # Make it 700x600 and center it
-        window_width = 700
-        window_height = 600
+        window_width = 750
+        window_height = 650
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         center_x = int(screen_width/2 - window_width / 2)
@@ -35,9 +35,9 @@ class SubwayBlockerUI:
         self.root.protocol("WM_DELETE_WINDOW", self.disable_event)
         
         # Fonts & Colors
-        self.title_font = ("Consolas", 32, "bold")
-        self.body_font = ("Arial", 16)
-        self.btn_font = ("Arial", 14, "bold")
+        self.title_font = ("Impact", 34, "normal")
+        self.body_font = ("Segoe UI", 16)
+        self.btn_font = ("Segoe UI", 14, "bold")
         self.color_danger = "#ff3b3b"
         self.color_primary = "#FF9800"
         self.color_bg = "#111827"
@@ -55,14 +55,19 @@ class SubwayBlockerUI:
         """Displays a loading screen while Gemini generates the 3 questions."""
         self.clear_ui()
         
-        title_lbl = tk.Label(self.root, text="DISTRACTION DETECTED!", font=self.title_font, fg=self.color_danger, bg=self.color_bg)
-        title_lbl.pack(pady=(100, 20))
+        self.canvas = tk.Canvas(self.root, highlightthickness=0)
+        self.canvas.place(x=0, y=0, relwidth=1, relheight=1)
+        colors = ["#171e2e", "#131926"]
+        for i in range(30):
+            y = i * 30
+            self.canvas.create_rectangle(0, y, 1000, y+30, fill=colors[i%2], outline="")
+            
+        self.canvas.create_text(375, 150, text="DISTRACTION DETECTED!", font=self.title_font, fill=self.color_danger)
         
-        info_lbl = tk.Label(self.root, text=f"You must answer 3 questions about '{self.topic}' to unlock.", font=self.body_font, fg="#fff", bg=self.color_bg)
-        info_lbl.pack()
+        txt = f"You must answer 3 questions about '{self.topic}' to unlock."
+        self.canvas.create_text(375, 250, text=txt, font=self.body_font, fill="#fff", width=600, justify="center")
         
-        loading_lbl = tk.Label(self.root, text="Loading questions...", font=("Arial", 14), fg=self.color_primary, bg=self.color_bg)
-        loading_lbl.pack(pady=20)
+        self.canvas.create_text(375, 350, text="Loading questions...", font=("Segoe UI", 14), fill=self.color_primary)
 
     def fetch_questions(self):
         """Runs concurrently to fetch questions from Gemini."""
@@ -97,32 +102,30 @@ class SubwayBlockerUI:
             
         current_mcq = self.mcqs[self.current_q_index]
 
-        # Top Banner
-        header = tk.Frame(self.root, bg="#000", height=100)
-        header.pack(fill="x", side="top")
+        self.canvas = tk.Canvas(self.root, highlightthickness=0)
+        self.canvas.place(x=0, y=0, relwidth=1, relheight=1)
+        colors = ["#171e2e", "#131926"]
+        for i in range(30):
+            y = i * 30
+            self.canvas.create_rectangle(0, y, 1000, y+30, fill=colors[i%2], outline="")
+            
+        # Top banner background
+        self.canvas.create_rectangle(0, 0, 1000, 80, fill="#0f172a", outline="")
+        self.canvas.create_text(375, 40, text="FOCUS PENALTY", font=("Impact", 28, "normal"), fill=self.color_primary)
         
-        title_lbl = tk.Label(header, text="FOCUS PENALTY", font=("Helvetica", 24, "bold"), fg=self.color_danger, bg="#000")
-        title_lbl.pack(pady=30)
-        
-        progress_lbl = tk.Label(self.root, text=f"Question {self.current_q_index + 1} of {self.correct_answers_needed}", font=("Arial", 12, "bold"), fg=self.color_primary, bg=self.color_bg)
-        progress_lbl.pack(pady=20)
+        # Details & text
+        self.canvas.create_text(375, 120, text=f"Question {self.current_q_index + 1} of {self.correct_answers_needed}", font=("Segoe UI", 12, "bold"), fill=self.color_primary)
+        self.canvas.create_text(375, 180, text=current_mcq.question, font=("Segoe UI", 16), fill="#fff", width=650, justify="center")
 
-        # Question Text
-        q_text = tk.Label(self.root, text=current_mcq.question, font=("Arial", 16), fg="#fff", bg=self.color_bg, wraplength=600, justify="center")
-        q_text.pack(pady=20)
-
-        # Container for evenly spaced buttons
-        btn_frame = tk.Frame(self.root, bg=self.color_bg)
-        btn_frame.pack(pady=20)
-
-        # Create buttons
-        for opt in current_mcq.options:
+        # Buttons placed evenly
+        start_y = 280
+        for i, opt in enumerate(current_mcq.options):
             btn = tk.Button(
-                btn_frame, 
+                self.root, 
                 text=opt, 
-                font=("Arial", 11, "bold"), 
-                bg="#333", 
-                fg="#fff",
+                font=("Segoe UI", 12, "bold"), 
+                bg="#334155", 
+                fg="#f8fafc",
                 activebackground=self.color_primary,
                 activeforeground="#000",
                 width=50,
@@ -131,10 +134,9 @@ class SubwayBlockerUI:
                 cursor="hand2",
                 command=lambda o=opt: self.check_answer(o, current_mcq)
             )
-            btn.pack(pady=5)
+            self.canvas.create_window(375, start_y + (i * 65), window=btn)
             
-        self.feedback_lbl = tk.Label(self.root, text="", font=self.btn_font, bg=self.color_bg)
-        self.feedback_lbl.pack(pady=10)
+        self.feedback_text = self.canvas.create_text(375, 570, text="", font=self.btn_font, fill=self.color_danger, width=650, justify="center")
         
 
 
@@ -143,12 +145,12 @@ class SubwayBlockerUI:
         if selected == mcq.correct_answer:
             self.current_q_index += 1
             if self.current_q_index >= self.correct_answers_needed:
-                self.feedback_lbl.config(text="Challenge Passed. Unlocking...", fg="#00E676")
+                self.canvas.itemconfig(self.feedback_text, text="Challenge Passed. Unlocking...", fill="#00E676")
                 self.root.after(1000, self.unlock_system)
             else:
                 self.build_ui_question()
         else:
-            self.feedback_lbl.config(text=f"WRONG! {mcq.explanation}", fg=self.color_danger, wraplength=800)
+            self.canvas.itemconfig(self.feedback_text, text=f"WRONG! {mcq.explanation}", fill=self.color_danger)
 
     def unlock_system(self):
         """Destroys the tkinter blocking window entirely."""

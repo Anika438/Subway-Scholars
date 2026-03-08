@@ -39,26 +39,40 @@ def get_sprints_from_ai(text_context: str, target_date: datetime.date) -> List[S
     You are an AI assistant that plans study sprints for a user.
     Assume the current date and time is {datetime.datetime.now().isoformat()}.
     
+    CRITICAL INSTRUCTION: Completely IGNORE all conversational introductions, greetings, meta-comments or context statements (e.g., "Today is a heavy study day. I need to cover modules for three different subjects before tomorrow!", "Here is my schedule"). Do NOT create sprints for these sentences. ONLY create sprints for the actual academic topics, modules, or calendar events provided.
+    
     The user will provide text representing their daily schedule/calendar events, a list of study goals, OR a detailed course syllabus/curriculum.
     
-    Case A: The user provides a course syllabus, curriculum, or detailed list of topics.
-    - Break down the subjects into distinct, chewable topics (e.g., instead of just "Math", use "Math: Integration by Parts").
-    - Generate a series of sprints to cover these specific course topics sequentially.
+    Case A: The user provides a course syllabus, curriculum, or detailed list of topics (e.g., lists with brackets, headers, or bullet points).
+    - Break down the subjects into distinct, chewable topics.
+    - Generate a series of sprints to cover ONLY these specific course topics sequentially.
     - The `suggested_topic` MUST be the specific chapter/topic name from the course. This will be used later to generate quizzes, so be precise!
-    - The duration of the sprint should be around 45 mins per topic unless otherwise specified.
+    - The `duration_minutes` should be exactly what the user specified if they provided a time (e.g. "Maths: 70 mins" -> 70). Otherwise, default to 45 mins per topic.
 
     Case B: The user provides a list or timeline of busy calendar events.
     - Identify open blocks of free time that are at least 30 minutes long.
     - Create study sprints in those empty gaps. 
-    - If the user's calendar events ARE the subjects/course topics they want to study (e.g. "Math: 4pm to 5pm"), then make the `suggested_topic` exactly that. 
+    - If the user's calendar events ARE the subjects/course topics they want to study (e.g. "Math: 4pm to 5pm"), then make the `suggested_topic` exactly "Math" (do NOT include the time in the topic name). 
     - Otherwise, if the events are just "busy" indicators (e.g. "Lunch"), name the `suggested_topic` something relevant to the time of day (e.g., 'Morning Study Session').
-    - The duration of the sprint should fill the available gap in the calendar.
+    - The `duration_minutes` should fill the available gap in the calendar, UNLESS explicitly stated.
 
     Case C: The user provides a list of general subjects to study without explicit free/busy times.
     - Count the number of distinct subjects provided. 
     - Generate EXACTLY that many sprints, one per subject.
-    - The `suggested_topic` MUST be the name of the subject. 
-    - Do NOT invent extra sprints (e.g., 'Quiz Preparation', 'Review', 'Break'). The number of sprints MUST equal the number of subjects.
+    - The `suggested_topic` MUST be the name of the subject (e.g. just "Maths", not "Maths: 70 mins"). 
+    - The `duration_minutes` MUST be exactly what the user requested if they provided a duration (e.g. "Maths: 70 mins" -> 70). Otherwise, default to 45 mins.
+    - Do NOT invent extra sprints. The number of sprints MUST equal the number of subjects.
+    
+    CRITICAL RULES FOR `duration_minutes`:
+    - If the user asks for a specific number of minutes or hours, YOU MUST SET `duration_minutes` to that exact time in minutes!
+    - "70 mins" = 70. "2 hours" = 120. Do NOT default to 45 minutes if the user gave you a duration!
+
+    CRITICAL RULES FOR `suggested_topic`:
+    - MUST be concise (1-7 words).
+    - MUST use Title Case, DO NOT use ALL CAPS.
+    - MUST NOT include the duration or time (e.g. extract "Maths" from "Maths: 70 mins").
+    - NEVER use conversational filler, whole sentences, or meta-text for a topic. If a line is just conversational context, DO NOT make a sprint for it at all!
+    - Remove bullet points, brackets, or markdown from the topic name.
     
     Return a JSON object with a "sprints" key containing an array of study sprints matching this exact schema:
     {{
@@ -81,9 +95,12 @@ def get_sprints_from_ai(text_context: str, target_date: datetime.date) -> List[S
         # Use Groq JSON mode to enforce the StudySprint format
         response = client.chat.completions.create(
             model='llama-3.3-70b-versatile',
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": "You are a strict data extraction parser. You NEVER include conversational user text in your JSON output."},
+                {"role": "user", "content": prompt}
+            ],
             response_format={"type": "json_object"},
-            temperature=0.7,
+            temperature=0.2,
         )
         
         # Parse the structured JSON response
@@ -240,6 +257,39 @@ def filter_notification(notification_text: str, current_study_topic: str) -> boo
         
     except Exception as e:
          print(f"Error filtering notification: {e}")
+         return False
+
+
+def is_window_relevant(window_title: str, current_study_topic: str) -> bool:
+    """
+    Uses Gemini to determine if a blacklisted window (like YouTube) might actually
+    be relevant to the active study topic.
+    Returns True if relevant (allow), False if irrelevant (block).
+    """
+    if not client:
+        return False # Default to blocking if no AI available to judge
+
+    prompt = f"""
+    The user is currently studying: '{current_study_topic}'.
+    They just opened a window with the following title:
+    "{window_title}"
+
+    Is this window title directly relevant to their study topic, or is it likely a distraction?
+    Answer MUST be exactly 'YES' (if relevant) or 'NO' (if distracting).
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model='llama-3.3-70b-versatile',
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+        )
+        
+        answer = response.choices[0].message.content.strip().upper()
+        return answer.startswith("YES")
+        
+    except Exception as e:
+         print(f"Error filtering window: {e}")
          return False
 
 # Example Usage

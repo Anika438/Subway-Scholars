@@ -110,6 +110,41 @@ async def lock_system(request: dict = None):
     print(f"System locked. Monitoring active for topic: {topic}", flush=True)
     return {"success": True, "message": "System locked. Monitoring resumed."}
 
+# --- Extension Integration Endpoints ---
+
+@app.get("/api/status")
+async def get_system_status():
+    """Returns basic state for the Chrome extension to display."""
+    if system_state["monitoring_active"] and not system_state["unlocked"]:
+         return {"active_sprint": {"suggested_topic": system_state["active_topic"]}}
+    return {"active_sprint": None}
+
+@app.get("/api/block")
+async def trigger_extension_block(url: str = None, topic: str = "General Study"):
+    """Triggers the Python tk popup window synchronously when called by the extension."""
+    if not system_state["is_blocking"]:
+         system_state["is_blocking"] = True
+         print(f"Browser distraction detected on {url}. Launching popup...", flush=True)
+         threading.Thread(
+            target=launch_os_blocker_sync,
+            args=(topic,),
+            daemon=True
+         ).start()
+    
+    # Return a simple HTML page telling the user they are blocked
+    html_content = f"""
+    <html>
+        <head><title>BLOCKED</title></head>
+        <body style="background-color: #111827; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: 'Segoe UI', sans-serif;">
+            <h1 style="color: #ff3b3b; font-size: 3rem;">FOCUS PENALTY</h1>
+            <p style="font-size: 1.5rem;">You tried to visit a distracting site during your '{topic}' sprint.</p>
+            <p>Please complete the challenge on your screen to proceed.</p>
+        </body>
+    </html>
+    """
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(content=html_content, status_code=200)
+
 # --- Brain Integration Endpoints ---
 
 class QuizRequest(BaseModel):
@@ -164,6 +199,18 @@ async def filter_notification_endpoint(request: NotificationRequest):
         return {"error": "Intelligence module not loaded."}
         
     is_relevant = intelligence.filter_notification(request.notification_text, request.current_topic)
+    return {"is_relevant": is_relevant}
+
+class WindowRequest(BaseModel):
+    window_title: str
+    current_topic: str
+
+@app.post("/api/brain/filter_window")
+async def filter_window_endpoint(request: WindowRequest):
+    """Determines if a window/tab title is relevant to the topic."""
+    if not intelligence:
+         return {"is_relevant": False}
+    is_relevant = intelligence.is_window_relevant(request.window_title, request.current_topic)
     return {"is_relevant": is_relevant}
 
 # --- Notification Monitor Endpoints ---
@@ -253,6 +300,9 @@ def distraction_monitor_loop():
     """Background thread that continuously scans active windows for blacklisted apps.
     Only runs when monitoring_active is True (after user clicks a sprint card)."""
     print("Distraction Monitor Thread Started.", flush=True)
+    pending_distraction_start = None
+    last_relevant_title = None
+
     while True:
         try:
             if system_state["monitoring_active"] and not system_state["unlocked"] and not system_state["is_blocking"]:
@@ -263,27 +313,52 @@ def distraction_monitor_loop():
                 if active_window is not None:
                     title = active_window.title.lower()
                     if any(app_name in title for app_name in BLACKLIST):
-                        print(f"Distraction detected: '{title}'. Notifying clients!", flush=True)
-                        system_state["is_blocking"] = True
-                        # Send BLOCK event to all connected UI clients
-                        import asyncio as _asyncio
-                        try:
-                            loop = _asyncio.get_event_loop()
-                            if loop.is_running():
-                                _asyncio.ensure_future(broadcast_event({
-                                    "event": "BLOCK",
-                                    "app": title,
-                                    "is_blocking": True,
-                                    "active_topic": system_state["active_topic"]
-                                }))
-                        except Exception as e:
-                            print(f"WS broadcast error: {e}", flush=True)
-                        # Also launch OS blocker as fallback
-                        threading.Thread(
-                            target=launch_os_blocker_sync,
-                            args=(system_state["active_topic"],),
-                            daemon=True
-                        ).start()
+                        if title == last_relevant_title:
+                            pass # Already approved this specific window/video
+                        elif pending_distraction_start is None:
+                            pending_distraction_start = time.time()
+                            print(f"Blacklisted app detected: '{title}'. Starting 15s grace period...", flush=True)
+                        elif time.time() - pending_distraction_start > 15:
+                            print(f"Grace period over. Checking relevance for: '{title}'...", flush=True)
+                            
+                            # AI Check for Window Relevance
+                            is_relevant = False
+                            if intelligence:
+                                try:
+                                    is_relevant = intelligence.is_window_relevant(title, system_state["active_topic"])
+                                except Exception as e:
+                                    print(f"Window relevance check failed: {e}", flush=True)
+                            
+                            if not is_relevant:
+                                print(f"Distraction confirmed: '{title}'. Notifying clients!", flush=True)
+                                system_state["is_blocking"] = True
+                                pending_distraction_start = None
+                                # Send BLOCK event to all connected UI clients
+                                import asyncio as _asyncio
+                                try:
+                                    loop = _asyncio.get_event_loop()
+                                    if loop.is_running():
+                                        _asyncio.ensure_future(broadcast_event({
+                                            "event": "BLOCK",
+                                            "app": title,
+                                            "is_blocking": True,
+                                            "active_topic": system_state["active_topic"]
+                                        }))
+                                except Exception as e:
+                                    print(f"WS broadcast error: {e}", flush=True)
+                                # Also launch OS blocker as fallback
+                                threading.Thread(
+                                    target=launch_os_blocker_sync,
+                                    args=(system_state["active_topic"],),
+                                    daemon=True
+                                ).start()
+                            else:
+                                print(f"Window '{title}' deemed relevant to topic '{system_state['active_topic']}'. Allowing.", flush=True)
+                                last_relevant_title = title
+                                pending_distraction_start = None
+                    else:
+                        pending_distraction_start = None
+                        # Don't reset last_relevant_title immediately if they tab out for a second
         except Exception as e:
             print(f"Monitor error: {e}", flush=True)
         time.sleep(1)
