@@ -2,7 +2,7 @@ import sqlite3
 import os
 import bcrypt
 
-DB_FILE = os.path.join(os.path.dirname(__file__), 'subway_scholars.db')
+DB_FILE = os.path.join(os.path.dirname(__file__), 'focusguard.db')
 
 def get_db_connection():
     conn = sqlite3.connect(DB_FILE, check_same_thread=False)

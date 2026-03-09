@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Subway Scholars Blocker",
+  "name": "FocusGuard Blocker",
   "version": "1.0",
-  "description": "Browser extension to compliment the OS-level Subway Scholars focus blocker.",
+  "description": "Browser extension to compliment the OS-level FocusGuard focus blocker.",
   "permissions": [
     "tabs",
     "activeTab",

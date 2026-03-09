@@ -54,7 +54,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
         chrome.notifications.create({
             type: "basic",
             iconUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", // empty pixel
-            title: "Subway Scholars",
+            title: "FocusGuard",
             message: "Sprint Completed! Great job focusing."
         });
     } else if (alarm.name.startsWith("check_tab_")) {

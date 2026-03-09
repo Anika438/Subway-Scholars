@@ -30,7 +30,7 @@ from fastapi import Depends
 
 from database import init_db
 
-SECRET_KEY = "my_super_secret_key_for_subway_scholars"  # In production, use env variable
+SECRET_KEY = "my_super_secret_key_for_focusguard"  # In production, use env variable
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 1 week
 

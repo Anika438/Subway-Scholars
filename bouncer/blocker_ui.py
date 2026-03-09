@@ -8,7 +8,7 @@ import threading
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'brain')))
 import intelligence
 
-class SubwayBlockerUI:
+class FocusGuardBlockerUI:
     def __init__(self, topic: str):
         self.topic = topic
         self.mcqs = []
@@ -158,7 +158,7 @@ class SubwayBlockerUI:
         
 def block_screen(topic="General Study"):
     """Entry point to trigger the tkinter blocker synchronously. Should be run in a separate thread depending on the server loop."""
-    ui = SubwayBlockerUI(topic)
+    ui = FocusGuardBlockerUI(topic)
     ui.root.mainloop()
 
 if __name__ == "__main__":

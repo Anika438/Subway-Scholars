@@ -1,6 +1,6 @@
-# Subway Scholars
+# FocusGuard
 
-Welcome to Subway Scholars, a gamified productivity application that transforms your study schedule into an engaging runner experience.
+Welcome to FocusGuard, a gamified productivity application that transforms your study schedule into an engaging runner experience.
 
 Take control of your focus time by automatically generating dynamic study sprints using AI, and conquer distractions with an OS-level blocker that forces you to answer academic quizzes if you try to slack off.
 
@@ -20,7 +20,7 @@ Take control of your focus time by automatically generating dynamic study sprint
 
 ## Prerequisites
 
-To run Subway Scholars locally, you'll need:
+To run FocusGuard locally, you'll need:
 - Python 3.10+
 - A modern web browser
 - A free Groq API Key (for the AI generation)
@@ -36,7 +36,7 @@ To run Subway Scholars locally, you'll need:
 
 1. **Navigate to the backend directory:**
    ```bash
-   cd Subway-Scholars/bouncer
+   cd FocusGuard/bouncer
    ```
 
 2. **Install all Python dependencies:**
@@ -45,7 +45,7 @@ To run Subway Scholars locally, you'll need:
    ```
 
 3. **Configure your Environment:**
-   Open the `.env` file located in `Subway-Scholars/bouncer/` and paste your Groq API key:
+   Open the `.env` file located in `FocusGuard/bouncer/` and paste your Groq API key:
    ```env
    GROQ_API_KEY=your_api_key_here
    ```
@@ -65,7 +65,7 @@ python main.py
 Leave this terminal window open. The Python guard is now monitoring for API requests and system distractions.
 
 ### 2. Launch the Web App
-Open your file explorer, navigate to `Subway-Scholars/app/`, and double-click `auth.html` to register an account or log in. From there, you will be redirected to the main hub.
+Open your file explorer, navigate to `FocusGuard/app/`, and double-click `auth.html` to register an account or log in. From there, you will be redirected to the main hub.
 
 ### 3. Start a Mission
 - Type what you want to study into the Mission Board or upload a calendar syllabus.
